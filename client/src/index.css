@@ -1,0 +1,229 @@
+*,
+
+*::before,
+
+*::after {
+
+  box-sizing: border-box;
+
+}
+
+
+
+:root,
+
+[data-theme="dark"] {
+
+  --bg: #0f1117;
+
+  --surface: #1a1d27;
+
+  --surface-2: #252936;
+
+  --border: #2e3344;
+
+  --text: #e8eaef;
+
+  --muted: #8b92a8;
+
+  --accent: #3b82f6;
+
+  --accent-hover: #2563eb;
+
+  --accent-soft: rgba(59, 130, 246, 0.1);
+
+  --danger: #ef4444;
+
+  --success: #22c55e;
+
+  --record: #dc2626;
+
+  --on-accent: #fff;
+
+  --error-text: #fca5a5;
+
+  --error-bg: rgba(239, 68, 68, 0.15);
+
+  --tab-close-hover-bg: rgba(239, 68, 68, 0.12);
+
+  --tab-close-hover-text: #fca5a5;
+
+  --tab-close-active-bg: rgba(239, 68, 68, 0.28);
+
+  --tab-close-active-text: #fecaca;
+
+  --backdrop: rgba(0, 0, 0, 0.55);
+
+  --shadow: rgba(0, 0, 0, 0.35);
+
+  --video-bg: #000;
+
+  --timeline-outline: #fff;
+
+  --radius: 8px;
+
+  color-scheme: dark;
+
+}
+
+
+
+[data-theme="light"] {
+
+  --bg: #eef1f6;
+
+  --surface: #ffffff;
+
+  --surface-2: #e8ecf3;
+
+  --border: #cdd3df;
+
+  --text: #151823;
+
+  --muted: #5c6478;
+
+  --accent: #2563eb;
+
+  --accent-hover: #1d4ed8;
+
+  --accent-soft: rgba(37, 99, 235, 0.1);
+
+  --danger: #dc2626;
+
+  --success: #16a34a;
+
+  --record: #dc2626;
+
+  --on-accent: #fff;
+
+  --error-text: #b91c1c;
+
+  --error-bg: rgba(220, 38, 38, 0.1);
+
+  --tab-close-hover-bg: rgba(220, 38, 38, 0.1);
+
+  --tab-close-hover-text: #b91c1c;
+
+  --tab-close-active-bg: rgba(220, 38, 38, 0.18);
+
+  --tab-close-active-text: #991b1b;
+
+  --backdrop: rgba(15, 17, 23, 0.45);
+
+  --shadow: rgba(15, 17, 23, 0.15);
+
+  --video-bg: #000;
+
+  --timeline-outline: #151823;
+
+  color-scheme: light;
+
+}
+
+
+
+:root {
+
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  line-height: 1.5;
+
+  color: var(--text);
+
+  background: var(--bg);
+
+}
+
+
+
+body {
+
+  margin: 0;
+
+  min-height: 100vh;
+
+}
+
+
+
+button,
+
+input,
+
+select {
+
+  font: inherit;
+
+}
+
+
+
+button:not(.MuiButtonBase-root) {
+
+  cursor: pointer;
+
+  border: none;
+
+  border-radius: var(--radius);
+
+  padding: 0.5rem 1rem;
+
+  background: var(--surface-2);
+
+  color: var(--text);
+
+  transition: background 0.15s;
+
+}
+
+
+
+button:not(.MuiButtonBase-root):hover:not(:disabled) {
+
+  background: var(--border);
+
+}
+
+
+
+button:not(.MuiButtonBase-root):disabled {
+
+  opacity: 0.5;
+
+  cursor: not-allowed;
+
+}
+
+
+
+input,
+
+select {
+
+  background: var(--surface);
+
+  border: 1px solid var(--border);
+
+  border-radius: var(--radius);
+
+  color: var(--text);
+
+  padding: 0.5rem 0.75rem;
+
+  width: 100%;
+
+}
+
+
+
+input:focus,
+
+select:focus {
+
+  outline: 2px solid var(--accent);
+
+  outline-offset: 1px;
+
+}
+
+
