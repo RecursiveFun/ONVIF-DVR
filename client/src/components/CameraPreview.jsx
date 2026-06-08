@@ -34,7 +34,7 @@ export default function CameraPreview({ cameraId, streaming, size = 'md' }) {
 
       if (Hls.isSupported()) {
         const hls = new Hls({
-          enableWorker: true,
+          enableWorker: false,
           lowLatencyMode: true,
           liveSyncDurationCount: 2,
           maxBufferLength: 10,

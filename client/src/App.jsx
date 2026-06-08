@@ -132,11 +132,16 @@ export default function App() {
       return;
     }
     setMultiviewIds((prev) => {
+      const cameraIds = cameras.map((cam) => cam.id);
       const normalized = normalizeMultiviewIds(
-        prev.length > 0 ? prev : loadMultiviewIds(cameras.map((cam) => cam.id)),
-        cameras.map((cam) => cam.id),
+        prev.length > 0 ? prev : loadMultiviewIds(cameraIds),
+        cameraIds,
       );
-      return normalized.length > 0 ? normalized : cameras.map((cam) => cam.id);
+      const next = normalized.length > 0 ? normalized : cameraIds;
+      if (next.length === prev.length && next.every((id, i) => id === prev[i])) {
+        return prev;
+      }
+      return next;
     });
   }, [cameras]);
 

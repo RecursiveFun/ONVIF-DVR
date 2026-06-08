@@ -1,3 +1,13 @@
+function createRandomId() {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const rand = Math.floor(Math.random() * 16);
+    return (char === 'x' ? rand : (rand & 0x3) | 0x8).toString(16);
+  });
+}
+
 function getNameSlot(label) {
   const namePart = String(label).split(' · ')[0];
   const numbered = namePart.match(/^(.+?) \((\d+)\)$/);
@@ -31,7 +41,7 @@ export function labelSegmentTab(cameraName, segment, tabs, excludeTabId) {
 }
 
 export function createCameraTab(camera, tabs) {
-  const id = crypto.randomUUID();
+  const id = createRandomId();
   return {
     id,
     type: 'camera',
@@ -41,7 +51,7 @@ export function createCameraTab(camera, tabs) {
 }
 
 export function createSegmentTab(cameraId, cameraName, segment, tabs) {
-  const id = crypto.randomUUID();
+  const id = createRandomId();
   return {
     id,
     type: 'segment',

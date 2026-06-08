@@ -20,6 +20,7 @@ async function waitForPlaylist(src, maxAttempts = 30, intervalMs = 1000) {
 export default function LivePlayer({ src, active, compact = false }) {
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
+  const hasPlayedRef = useRef(false);
   const [status, setStatus] = useState('connecting');
   const {
     containerRef,
@@ -33,23 +34,25 @@ export default function LivePlayer({ src, active, compact = false }) {
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !src || !active) return;
+    if (!video || !src || !active) return undefined;
 
     let cancelled = false;
 
     async function start() {
-      setStatus('connecting');
+      if (!hasPlayedRef.current) {
+        setStatus('connecting');
+      }
       const ready = await waitForPlaylist(src);
-      if (cancelled) return;
+      if (cancelled) return undefined;
 
       if (!ready) {
         setStatus('waiting');
-        return;
+        return undefined;
       }
 
       if (Hls.isSupported()) {
         const hls = new Hls({
-          enableWorker: true,
+          enableWorker: false,
           lowLatencyMode: true,
           liveSyncDurationCount: 3,
           manifestLoadingMaxRetry: 12,
@@ -59,25 +62,30 @@ export default function LivePlayer({ src, active, compact = false }) {
         hls.loadSource(src);
         hls.attachMedia(video);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          hasPlayedRef.current = true;
           setStatus('playing');
           video.play().catch(() => {});
         });
         hls.on(Hls.Events.ERROR, (_e, data) => {
-          if (data.fatal) {
-            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-              setStatus('reconnecting');
-              hls.startLoad();
-            } else {
-              setStatus('error');
-              hls.destroy();
-            }
+          if (!data.fatal) return;
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            setStatus(hasPlayedRef.current ? 'reconnecting' : 'connecting');
+            hls.startLoad();
+            return;
           }
+          setStatus('error');
+          hls.destroy();
         });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        return undefined;
+      }
+
+      if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = src;
         video.play().catch(() => {});
+        hasPlayedRef.current = true;
         setStatus('playing');
       }
+      return undefined;
     }
 
     start();
@@ -90,10 +98,15 @@ export default function LivePlayer({ src, active, compact = false }) {
   }, [src, active]);
 
   useEffect(() => {
-    if (!active && videoRef.current) {
-      videoRef.current.pause();
+    if (!active) {
+      hasPlayedRef.current = false;
+      if (videoRef.current) {
+        videoRef.current.pause();
+      }
     }
   }, [active]);
+
+  const showStatus = status !== 'playing';
 
   return (
     <div className={`live-player-wrap${compact ? ' compact' : ''}`} ref={containerRef}>
@@ -104,16 +117,16 @@ export default function LivePlayer({ src, active, compact = false }) {
         playsInline
         autoPlay
       />
-      {status === 'connecting' && (
+      {showStatus && status === 'connecting' && (
         <div className="live-status">Connecting to camera…</div>
       )}
-      {status === 'waiting' && (
+      {showStatus && status === 'waiting' && (
         <div className="live-status">Waiting for stream (check FFmpeg logs)…</div>
       )}
-      {status === 'reconnecting' && (
+      {showStatus && status === 'reconnecting' && (
         <div className="live-status">Reconnecting…</div>
       )}
-      {status === 'error' && (
+      {showStatus && status === 'error' && (
         <div className="live-status error">Live stream error</div>
       )}
       {!compact && (

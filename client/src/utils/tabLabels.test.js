@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { labelCameraTab, labelSegmentTab } from './tabLabels.js';
+import { createCameraTab, labelCameraTab, labelSegmentTab } from './tabLabels.js';
+
+describe('createCameraTab', () => {
+  it('creates an id when crypto.randomUUID is unavailable', () => {
+    const original = globalThis.crypto?.randomUUID;
+    if (globalThis.crypto) {
+      globalThis.crypto.randomUUID = undefined;
+    }
+    try {
+      const tab = createCameraTab({ id: 'cam-1', name: 'C120' }, []);
+      expect(tab.id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      );
+    } finally {
+      if (globalThis.crypto && original) {
+        globalThis.crypto.randomUUID = original;
+      }
+    }
+  });
+});
 
 describe('labelCameraTab', () => {
   it('returns base name when no duplicate exists', () => {

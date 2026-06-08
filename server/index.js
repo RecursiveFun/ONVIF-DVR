@@ -1,4 +1,5 @@
 import { checkFfmpeg } from './ffmpegUtil.js';
+import { listLanUrls } from './networkUrls.js';
 import { purgeExpiredRecordings } from './recordings.js';
 import { getRetentionDays } from './settings.js';
 import { createApp } from './app.js';
@@ -88,6 +89,16 @@ function shutdown(signal) {
 
 function onListen() {
   console.log(`ONVIF-DVR server listening on http://${HOST}:${PORT}`);
+  if (process.env.SERVE_CLIENT === 'true') {
+    console.log('Serving built UI from client/dist (LAN mode)');
+    const lanUrls = listLanUrls(PORT);
+    if (lanUrls.length > 0) {
+      console.log('Open on other devices:');
+      for (const url of lanUrls) {
+        console.log(`  ${url}`);
+      }
+    }
+  }
   const retentionDays = getRetentionDays();
   console.log(
     retentionDays === 0

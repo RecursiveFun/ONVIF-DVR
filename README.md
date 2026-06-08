@@ -189,6 +189,27 @@ Open **http://localhost:5173** in your browser.
 
 The Vite dev server proxies `/api` and `/live` to the backend automatically.
 
+### LAN access (phones, tablets, other PCs)
+
+**Do not use `npm run dev` on other devices.** The Vite dev server keeps a WebSocket open for hot-reload; over the network that connection drops and the page reloads in a loop (flicker).
+
+For stable access from other devices on your LAN:
+
+```bash
+npm run lan
+```
+
+This builds the UI and serves everything from the API server on port **3001** (e.g. `http://10.0.0.155:3001`). Use your machine's LAN IP — allow Node.js through Windows Firewall for private networks if needed.
+
+Keep `npm run dev` for development on this PC only (`http://localhost:5173`). Hot-reload is off by default; opt in with `VITE_HMR=true npm run dev` for UI-only work.
+
+**Troubleshooting flicker on other devices**
+
+1. Stop `npm run dev` — only run **one** of `npm run dev` or `npm run lan`, not both.
+2. Use `npm run lan` (port **3001**), not port 5173.
+3. After code changes, run `npm run lan` again to rebuild the UI.
+4. Hard-refresh the other device (or clear site data) if you previously opened the old dev URL.
+
 ### Production build
 
 ```bash
@@ -360,8 +381,9 @@ Recording IDs are relative paths like `camera-uuid/2026-06-08_14-30-00.mp4`.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3001` | API server port |
-| `HOST` | `127.0.0.1` | Bind address (`0.0.0.0` to listen on all interfaces) |
-| `CORS_ORIGINS` | *(localhost only)* | Comma-separated allowed browser origins (e.g. `http://localhost:5173,http://192.168.1.10:5173`) |
+| `HOST` | `127.0.0.1` | Bind address (`npm run lan` sets `0.0.0.0`) |
+| `SERVE_CLIENT` | *(unset)* | Set to `true` to serve `client/dist` from the API server (enabled by `npm run lan`) |
+| `CORS_ORIGINS` | *(localhost + private LAN IPs)* | Comma-separated extra allowed browser origins when the defaults are not enough |
 | `FFMPEG_PATH` | *(auto-detect)* | Full path to `ffmpeg` if not on `PATH` |
 
 ### DVR settings (in the UI)
@@ -381,7 +403,7 @@ ONVIF DVR is designed as a **local-first** app. By default the API binds to **lo
 | Measure | Details |
 |---------|---------|
 | **Localhost bind** | Server listens on `127.0.0.1` unless `HOST` is set |
-| **CORS** | Restricted to localhost by default; set `CORS_ORIGINS` for LAN access |
+| **CORS** | Allows localhost and private LAN IPs (`10.x`, `172.16–31.x`, `192.168.x`) by default; set `CORS_ORIGINS` for other origins |
 | **Path traversal** | Recording paths and folder browser are validated against allowlisted roots |
 | **Input validation** | RTSP URLs and ONVIF hostnames are validated before use |
 | **SSRF mitigation** | Cloud metadata hostnames are blocked for ONVIF probe/connect |

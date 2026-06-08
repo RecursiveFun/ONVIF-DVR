@@ -1,6 +1,8 @@
 import cors from 'cors';
 import express from 'express';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import { checkFfmpeg } from './ffmpegUtil.js';
 import {
@@ -70,7 +72,11 @@ function getCorsOptions() {
         callback(null, true);
         return;
       }
-      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) {
+      if (
+        /^https?:\/\/((localhost|127\.0\.0\.1)|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})(:\d+)?$/i.test(
+          origin,
+        )
+      ) {
         callback(null, true);
         return;
       }
@@ -81,6 +87,9 @@ function getCorsOptions() {
 
 const apiRateLimiter = createRateLimiter({ windowMs: 60_000, max: 600 });
 const strictRateLimiter = createStrictRateLimiter({ windowMs: 60_000, max: 60 });
+
+const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
+const CLIENT_DIST = path.join(SERVER_DIR, '..', 'client', 'dist');
 
 export function createApp() {
   const app = express();
@@ -93,6 +102,7 @@ export function createApp() {
 
   app.use('/live', express.static(LIVE_DIR, {
     setHeaders(res, filePath) {
+      res.removeHeader('Cross-Origin-Resource-Policy');
       if (filePath.endsWith('.m3u8')) {
         res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
         res.setHeader('Cache-Control', 'no-cache');
@@ -408,6 +418,32 @@ export function createApp() {
       res.status(500).json({ error: e.message });
     }
   });
+
+  if (process.env.SERVE_CLIENT === 'true') {
+    if (!fs.existsSync(path.join(CLIENT_DIST, 'index.html'))) {
+      console.warn('[client] SERVE_CLIENT is set but client/dist is missing — run npm run build');
+    } else {
+      app.use(express.static(CLIENT_DIST, {
+        setHeaders(res, filePath) {
+          if (filePath.endsWith('index.html')) {
+            res.setHeader('Cache-Control', 'no-cache');
+          }
+        },
+      }));
+      app.get('*', (req, res, next) => {
+        if (req.method !== 'GET' || req.path.startsWith('/api') || req.path.startsWith('/live')) {
+          next();
+          return;
+        }
+        if (path.extname(req.path)) {
+          next();
+          return;
+        }
+        res.setHeader('Cache-Control', 'no-cache');
+        res.sendFile(path.join(CLIENT_DIST, 'index.html'));
+      });
+    }
+  }
 
   return app;
 }
