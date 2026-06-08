@@ -11,10 +11,6 @@ vi.mock('./SegmentPreview.jsx', () => ({
   default: ({ time }) => <span data-testid="segment-preview">{time}</span>,
 }));
 
-vi.mock('./DragHandle.jsx', () => ({
-  default: () => <span data-testid="drag-handle" />,
-}));
-
 const cameras = [{ id: 'cam-1', name: 'C120', status: 'live', recording: true }];
 const segment = { id: 'seg-1', startLocalDisplay: '2:30 PM' };
 

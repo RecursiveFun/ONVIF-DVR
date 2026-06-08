@@ -12,7 +12,8 @@
     "test": "npm run test --prefix server && npm run test --prefix client",
     "test:server": "npm run test --prefix server",
     "test:client": "npm run test --prefix client",
-    "setup:hooks": "git config core.hooksPath .githooks"
+    "setup:hooks": "git config core.hooksPath .githooks",
+    "screenshots": "node scripts/capture-screenshots.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

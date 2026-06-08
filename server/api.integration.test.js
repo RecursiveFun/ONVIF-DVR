@@ -4,6 +4,7 @@ import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import request from 'supertest';
 import { createApp } from './app.js';
+import { checkFfmpeg } from './ffmpegUtil.js';
 import { resetSettingsForTests } from './settings.js';
 import { getRecordingsDir } from './settings.js';
 
@@ -178,7 +179,24 @@ describe('camera CRUD', () => {
       .expect(201);
 
     assert.equal(res.body.name, 'Camera');
-    assert.equal(res.body.status, 'idle');
+    if (checkFfmpeg().available) {
+      assert.equal(res.body.status, 'live');
+    } else {
+      assert.equal(res.body.status, 'idle');
+    }
+    await request(app).delete(`/api/cameras/${res.body.id}`).expect(200);
+  });
+
+  it('creates a camera from an http mjpeg-style url', async () => {
+    const encoded = 'http://203.181.0.118:6003/cgi-bin/camera?resolution=640&amp;amp;quality=1';
+    const res = await request(app)
+      .post('/api/cameras')
+      .send({ name: 'HTTP Cam', rtspUrl: encoded })
+      .expect(201);
+
+    assert.equal(res.body.name, 'HTTP Cam');
+    assert.match(res.body.rtspUrl, /^http:\/\/203\.181\.0\.118:6003\/cgi-bin\/camera\?/);
+    assert.ok(res.body.rtspUrl.includes('quality=1'));
     await request(app).delete(`/api/cameras/${res.body.id}`).expect(200);
   });
 

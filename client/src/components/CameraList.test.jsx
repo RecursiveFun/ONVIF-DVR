@@ -7,10 +7,6 @@ vi.mock('./CameraPreview.jsx', () => ({
   default: () => <span data-testid="camera-preview" />,
 }));
 
-vi.mock('./DragHandle.jsx', () => ({
-  default: () => <span data-testid="drag-handle" />,
-}));
-
 const cameras = [
   {
     id: 'cam-1',

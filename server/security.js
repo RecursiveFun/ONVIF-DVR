@@ -72,30 +72,55 @@ export function assertUnderBrowseRoots(resolvedPath) {
 
 // --- URL and hostname validation ---
 
+const SUPPORTED_STREAM_PROTOCOLS = new Set(['rtsp:', 'rtsps:', 'http:', 'https:']);
+
 /**
- * Validate an RTSP or RTSPS stream URL from user input.
- * @param {string} rtspUrl
- * @returns {string} Trimmed URL when valid.
+ * Decode HTML entities often pasted from browser links (e.g. &amp;amp; → &).
+ * @param {string} value
+ * @returns {string}
+ */
+export function normalizeStreamUrl(value) {
+  let out = value.trim();
+  for (let i = 0; i < 5; i += 1) {
+    const next = out
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'");
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}
+
+/**
+ * Validate a camera stream URL (RTSP/RTSPS or HTTP/HTTPS MJPEG-style sources).
+ * @param {string} rtspUrl - API field name kept for backward compatibility.
+ * @returns {string} Normalized URL when valid.
  */
 export function validateRtspUrl(rtspUrl) {
   if (typeof rtspUrl !== 'string' || !rtspUrl.trim()) {
     throw new Error('rtspUrl is required');
   }
-  const trimmed = rtspUrl.trim();
+  const trimmed = normalizeStreamUrl(rtspUrl);
   if (trimmed.length > 2048 || /[\0\r\n]/.test(trimmed)) {
-    throw new Error('Invalid RTSP URL');
+    throw new Error('Invalid stream URL');
   }
   let parsed;
   try {
     parsed = new URL(trimmed);
   } catch {
-    throw new Error('RTSP URL must be a valid rtsp:// or rtsps:// URL');
+    throw new Error('Stream URL must be a valid rtsp://, rtsps://, http://, or https:// URL');
   }
-  if (parsed.protocol !== 'rtsp:' && parsed.protocol !== 'rtsps:') {
-    throw new Error('RTSP URL must use rtsp:// or rtsps://');
+  if (!SUPPORTED_STREAM_PROTOCOLS.has(parsed.protocol)) {
+    throw new Error('Stream URL must use rtsp://, rtsps://, http://, or https://');
   }
   if (!parsed.hostname) {
-    throw new Error('RTSP URL must include a host');
+    throw new Error('Stream URL must include a host');
+  }
+  if (BLOCKED_ONVIF_HOSTS.has(parsed.hostname.toLowerCase())) {
+    throw new Error('Stream URL host is not allowed');
   }
   return trimmed;
 }
@@ -130,7 +155,9 @@ export function validateOnvifHostname(hostname) {
  */
 export function maskRtspUrl(rtspUrl) {
   if (!rtspUrl || typeof rtspUrl !== 'string') return rtspUrl;
-  return rtspUrl.replace(/^(rtsps?:\/\/)(?:[^@/]+)@/i, '$1****:****@');
+  return rtspUrl
+    .replace(/^(rtsps?:\/\/)(?:[^@/]+)@/i, '$1****:****@')
+    .replace(/^(https?:\/\/)(?:[^@/]+)@/i, '$1****:****@');
 }
 
 /**

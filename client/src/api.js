@@ -49,6 +49,7 @@ export const api = {
   deleteRecording: (recordingId) =>
     request(`/api/recordings/${encodeURIComponent(recordingId)}`, { method: 'DELETE' }),
   liveUrl: (cameraId) => `/live/${cameraId}/index.m3u8`,
+  previewUrl: (cameraId) => `/api/cameras/${cameraId}/preview.jpg`,
 };
 
 /** Human-readable local date/time from an ISO string. */

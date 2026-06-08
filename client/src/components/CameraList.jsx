@@ -9,7 +9,6 @@ import ListItemButton from '@mui/material/ListItemButton';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import CameraPreview from './CameraPreview.jsx';
-import DragHandle from './DragHandle.jsx';
 import SidebarSection from './SidebarSection.jsx';
 import { setCameraDragData } from '../utils/dragPayload.js';
 import { statusColor, statusLabel } from '../utils/cameraStatus.js';
@@ -45,22 +44,25 @@ export default function CameraList({
                 disablePadding
                 secondaryAction={null}
                 className="camera-page-row"
-                sx={{ gap: 0.5 }}
               >
-                <DragHandle
-                  label={`Drag ${cam.name} to open a new tab`}
+                <ListItemButton
+                  draggable
+                  selected={isActive}
+                  className="draggable-row"
+                  onClick={() => onSelect(cam.id)}
                   onDragStart={(e) => handleDragStart(cam, e)}
                   onDragEnd={onDragEnd}
-                />
-                <ListItemButton
-                  selected={isActive}
-                  onClick={() => onSelect(cam.id)}
                   aria-current={!multiviewMode && cam.id === activeId ? 'page' : undefined}
                   aria-pressed={multiviewMode ? inMultiview : undefined}
+                  title={multiviewMode
+                    ? `${cam.name} — click to toggle, drag to add to multiview`
+                    : `${cam.name} — click to select, drag to open a new tab`}
                   sx={{ gap: 1, borderRadius: 1 }}
                 >
+                  <span className="drag-handle-icon" aria-hidden="true">⠿</span>
                   <CameraPreview
                     cameraId={cam.id}
+                    streamUrl={cam.rtspUrl}
                     streaming={cam.status === 'live' || cam.recording}
                   />
                   <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>

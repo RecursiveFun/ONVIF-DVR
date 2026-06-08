@@ -9,21 +9,31 @@
  *
  * Drag-and-drop from the sidebar or timeline can open new tabs or reorder the tab bar.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
-import CameraSetup from './components/CameraSetup.jsx';
 import CameraList from './components/CameraList.jsx';
 import CameraTabs from './components/CameraTabs.jsx';
-import CameraPageView from './components/CameraPageView.jsx';
-import MultiviewGrid from './components/MultiviewGrid.jsx';
+import MultiviewGridSizeToggle from './components/MultiviewGridSizeToggle.jsx';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import AppThemeProvider from './components/AppThemeProvider.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import ViewModeToggle from './components/ViewModeToggle.jsx';
 import SidebarToggle from './components/SidebarToggle.jsx';
-import AppSettings from './components/AppSettings.jsx';
 import StorageBanner from './components/StorageBanner.jsx';
+
+const CameraPageView = lazy(() => import('./components/CameraPageView.jsx'));
+const MultiviewGrid = lazy(() => import('./components/MultiviewGrid.jsx'));
+const CameraSetup = lazy(() => import('./components/CameraSetup.jsx'));
+const AppSettings = lazy(() => import('./components/AppSettings.jsx'));
+
+function PanelLoading({ label }) {
+  return (
+    <Box className="placeholder page-placeholder" sx={{ flex: 1, minHeight: 0 }}>
+      <Typography color="text.secondary">{label}</Typography>
+    </Box>
+  );
+}
 import { useTheme } from './hooks/useTheme.js';
 import { createCameraTab, createSegmentTab, labelCameraTab } from './utils/tabLabels.js';
 import { loadTabSession, restoreTabs, saveTabSession } from './utils/tabSession.js';
@@ -36,6 +46,11 @@ import {
   removeMultiviewId,
   toggleMultiviewId,
 } from './utils/multiviewSelection.js';
+import {
+  loadMultiviewGridSize,
+  maxMultiviewSlots,
+  saveMultiviewGridSize,
+} from './utils/multiviewGrid.js';
 import { DEFAULT_RETENTION_DAYS } from './utils/retention.js';
 import { DEFAULT_SEGMENT_DURATION_SEC } from './utils/segmentDuration.js';
 import {
@@ -67,6 +82,7 @@ export default function App() {
   const [playbackThumbTimes, setPlaybackThumbTimes] = useState({});
   const [viewMode, setViewMode] = useState(loadViewMode);
   const [multiviewIds, setMultiviewIds] = useState([]);
+  const [multiviewGridSize, setMultiviewGridSize] = useState(loadMultiviewGridSize);
 
   // --- Tab session persistence (debounced writes to localStorage) ---
 
@@ -140,6 +156,10 @@ export default function App() {
       saveMultiviewIds(multiviewIds);
     }
   }, [multiviewIds]);
+
+  useEffect(() => {
+    saveMultiviewGridSize(multiviewGridSize);
+  }, [multiviewGridSize]);
 
   useEffect(() => {
     if (cameras.length === 0) {
@@ -338,15 +358,40 @@ export default function App() {
 
   const selectCamera = (cameraId) => {
     if (viewMode === VIEW_MODE_MULTIVIEW) {
-      setMultiviewIds((prev) => toggleMultiviewId(prev, cameraId));
+      setMultiviewIds((prev) => {
+        if (prev.includes(cameraId)) {
+          return toggleMultiviewId(prev, cameraId);
+        }
+        const maxSlots = maxMultiviewSlots(multiviewGridSize);
+        if (prev.length >= maxSlots) return prev;
+        return toggleMultiviewId(prev, cameraId);
+      });
       return;
     }
     focusCameraTab(cameraId);
   };
 
+  const handleMultiviewGridSizeChange = useCallback((size) => {
+    setMultiviewGridSize(size);
+    setMultiviewIds((prev) => prev.slice(0, maxMultiviewSlots(size)));
+  }, []);
+
   const removeFromMultiview = useCallback((cameraId) => {
     setMultiviewIds((prev) => removeMultiviewId(prev, cameraId));
   }, []);
+
+  const handleMultiviewCameraDrop = useCallback((cameraId) => {
+    setDragging(false);
+    const camera = cameras.find((c) => c.id === cameraId);
+    if (!camera) return;
+    setViewMode(VIEW_MODE_MULTIVIEW);
+    setMultiviewIds((prev) => {
+      if (prev.includes(cameraId)) return prev;
+      const maxSlots = maxMultiviewSlots(multiviewGridSize);
+      if (prev.length >= maxSlots) return prev;
+      return [...prev, cameraId];
+    });
+  }, [cameras, multiviewGridSize]);
 
   const openCameraFromMultiview = useCallback((cameraId) => {
     setViewMode(VIEW_MODE_TABS);
@@ -506,7 +551,7 @@ export default function App() {
       <Box component="header" className="header">
         <Box>
           <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>ONVIF DVR</Typography>
-          <Typography variant="body2" color="text.secondary">Live RTSP streaming with local-time recording</Typography>
+          <Typography variant="body2" color="text.secondary">Live IP camera streaming with local-time DVR recording</Typography>
         </Box>
       </Box>
 
@@ -526,23 +571,25 @@ export default function App() {
                 onDragStart={startDrag}
                 onDragEnd={endDrag}
               />
-              <CameraSetup onAdded={handleAdded} />
-              <AppSettings
-                theme={theme}
-                onThemeChange={setTheme}
-                segmentDurationSec={segmentDurationSec}
-                onSegmentDurationChange={handleSegmentDurationChange}
-                retentionDays={retentionDays}
-                onRetentionDaysChange={handleRetentionDaysChange}
-                recordingsDir={recordingsDir}
-                onRecordingsDirChange={handleRecordingsDirChange}
-                storage={storage}
-              />
+              <Suspense fallback={null}>
+                <CameraSetup onAdded={handleAdded} />
+                <AppSettings
+                  theme={theme}
+                  onThemeChange={setTheme}
+                  segmentDurationSec={segmentDurationSec}
+                  onSegmentDurationChange={handleSegmentDurationChange}
+                  retentionDays={retentionDays}
+                  onRetentionDaysChange={handleRetentionDaysChange}
+                  recordingsDir={recordingsDir}
+                  onRecordingsDirChange={handleRecordingsDirChange}
+                  storage={storage}
+                />
+              </Suspense>
             </>
           )}
         </aside>
 
-        <section className="main-panel">
+        <section className={`main-panel${viewMode === VIEW_MODE_MULTIVIEW ? ' multiview-mode' : ''}`}>
           <div className="main-panel-toolbar">
             <ViewModeToggle viewMode={viewMode} onChange={handleViewModeChange} />
             {viewMode === VIEW_MODE_TABS && (
@@ -560,46 +607,62 @@ export default function App() {
               />
             )}
             {viewMode === VIEW_MODE_MULTIVIEW && (
-              <Typography className="main-panel-toolbar-hint" variant="body2" color="text.secondary">
-                Click cameras in the sidebar to show or hide them. Open a tile for the full camera page.
-              </Typography>
+              <>
+                <MultiviewGridSizeToggle
+                  gridSize={multiviewGridSize}
+                  onChange={handleMultiviewGridSizeChange}
+                />
+                <Typography className="main-panel-toolbar-hint" variant="body2" color="text.secondary">
+                  {dragging
+                    ? 'Drop a camera on an empty slot to add it to multiview.'
+                    : 'Choose a grid size, then click or drag cameras from the sidebar.'}
+                </Typography>
+              </>
             )}
           </div>
 
           {viewMode === VIEW_MODE_MULTIVIEW ? (
-            <MultiviewGrid
-              cameras={cameras}
-              selectedIds={multiviewIds}
-              onOpenCamera={openCameraFromMultiview}
-              onRemoveCamera={removeFromMultiview}
-            />
+            <Suspense fallback={<PanelLoading label="Loading multiview…" />}>
+              <MultiviewGrid
+                cameras={cameras}
+                selectedIds={multiviewIds}
+                gridSize={multiviewGridSize}
+                dragging={dragging}
+                onCameraDrop={handleMultiviewCameraDrop}
+                onDragEnd={endDrag}
+                onOpenCamera={openCameraFromMultiview}
+                onRemoveCamera={removeFromMultiview}
+              />
+            </Suspense>
           ) : !activeTab || !activeCamera ? (
             <Box className="placeholder page-placeholder">
               <Typography>No camera page selected.</Typography>
               <Typography color="text.secondary">Add a camera or pick one from the sidebar.</Typography>
             </Box>
           ) : (
-            <CameraPageView
-              key={activeTab.id}
-              camera={activeCamera}
-              initialSegment={activeTab.type === 'segment' ? activeTab.segment : null}
-              isSegmentTab={activeTab.type === 'segment'}
-              tabId={activeTab.id}
-              segmentDurationSec={segmentDurationSec}
-              retentionDays={retentionDays}
-              canRecord={storage?.canRecord !== false}
-              setCameras={setCameras}
-              refreshCameras={refreshCameras}
-              onRequestRemove={requestRemoveCamera}
-              onSegmentDeleted={handleSegmentDeleted}
-              onSegmentMetadataUpdate={handleSegmentMetadataUpdate}
-              onOpenSegmentTab={(seg) => openSegmentInNewTab(seg, activeCamera.id, activeCamera.name)}
-              onTabGoLive={handleTabGoLive}
-              getPlaybackPosition={getPlaybackPosition}
-              onPlaybackPositionChange={savePlaybackPosition}
-              onDragStart={startDrag}
-              onDragEnd={endDrag}
-            />
+            <Suspense fallback={<PanelLoading label="Loading camera page…" />}>
+              <CameraPageView
+                key={activeTab.id}
+                camera={activeCamera}
+                initialSegment={activeTab.type === 'segment' ? activeTab.segment : null}
+                isSegmentTab={activeTab.type === 'segment'}
+                tabId={activeTab.id}
+                segmentDurationSec={segmentDurationSec}
+                retentionDays={retentionDays}
+                canRecord={storage?.canRecord !== false}
+                setCameras={setCameras}
+                refreshCameras={refreshCameras}
+                onRequestRemove={requestRemoveCamera}
+                onSegmentDeleted={handleSegmentDeleted}
+                onSegmentMetadataUpdate={handleSegmentMetadataUpdate}
+                onOpenSegmentTab={(seg) => openSegmentInNewTab(seg, activeCamera.id, activeCamera.name)}
+                onTabGoLive={handleTabGoLive}
+                getPlaybackPosition={getPlaybackPosition}
+                onPlaybackPositionChange={savePlaybackPosition}
+                onDragStart={startDrag}
+                onDragEnd={endDrag}
+              />
+            </Suspense>
           )}
         </section>
       </main>

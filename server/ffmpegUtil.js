@@ -21,10 +21,14 @@ function existsExecutable(filePath) {
   }
 }
 
-function probeFfmpeg(candidate) {
+function probeBinary(candidate) {
   if (!candidate || !existsExecutable(candidate)) return false;
   const result = spawnSync(candidate, ['-version'], { stdio: 'ignore', timeout: 5000 });
   return result.status === 0;
+}
+
+function probeFfmpeg(candidate) {
+  return probeBinary(candidate);
 }
 
 function wingetFfmpegCandidates() {
@@ -70,6 +74,22 @@ export function resolveFfmpegPath() {
   return null;
 }
 
+/**
+ * Find `ffprobe` next to the resolved `ffmpeg` binary, or fall back to PATH.
+ * @returns {string | null}
+ */
+export function resolveFfprobePath() {
+  const ffmpegPath = resolveFfmpegPath();
+  const ext = process.platform === 'win32' ? '.exe' : '';
+
+  if (ffmpegPath && ffmpegPath !== 'ffmpeg') {
+    const sibling = path.join(path.dirname(ffmpegPath), `ffprobe${ext}`);
+    if (probeBinary(sibling)) return sibling;
+  }
+
+  return probeBinary('ffprobe') ? 'ffprobe' : null;
+}
+
 /** @returns {{ available: boolean, path: string | null }} */
 export function checkFfmpeg() {
   const ffmpegPath = resolveFfmpegPath();
@@ -80,6 +100,24 @@ export function checkFfmpeg() {
 }
 
 // --- Process spawn ---
+
+/** @param {string} line */
+export function shouldLogFfmpegStderr(line) {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  // HTTP MJPEG cameras often close the connection briefly; FFmpeg reconnects in-process.
+  if (/Will reconnect at \d+ in \d+ second\(s\), error=End of file/.test(trimmed)) {
+    return false;
+  }
+  // Cosmetic warnings from cameras with missing/broken timestamps or sparse audio.
+  if (/Codec AVOption b:a:\d+ .* has not been used/.test(trimmed)) return false;
+  if (/Timestamps are unset in a packet/.test(trimmed)) return false;
+  if (/Non-monotonic DTS/.test(trimmed)) return false;
+  if (/DTS discontinuity/.test(trimmed)) return false;
+  if (/Too many bits .* clamping to max/.test(trimmed)) return false;
+  if (/failed to delete old segment .* No such file or directory/.test(trimmed)) return false;
+  return true;
+}
 
 /**
  * Spawn ffmpeg with immediate error handling so ENOENT does not crash the server.
@@ -108,7 +146,10 @@ export function spawnFfmpeg(args, { label, onClose, onSpawnError }) {
   });
 
   child.stderr?.on('data', (d) => {
-    console.error(`[${label}]`, d.toString().trim());
+    for (const line of d.toString().split(/\r?\n/)) {
+      if (!shouldLogFfmpegStderr(line)) continue;
+      console.error(`[${label}]`, line.trim());
+    }
   });
 
   child.on('close', (code) => onClose?.(code));

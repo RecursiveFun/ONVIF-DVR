@@ -10,7 +10,6 @@ import IconButton from '@mui/material/IconButton';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import CameraPreview from './CameraPreview.jsx';
 import SegmentPreview from './SegmentPreview.jsx';
-import DragHandle from './DragHandle.jsx';
 import { parseDragPayload, setTabDragData } from '../utils/dragPayload.js';
 
 /** Map pointer position to the tab index where a drop would insert (midpoint split per tab). */
@@ -178,17 +177,17 @@ export default function CameraTabs({
             onDragOver={handleBarDragOver}
             onDrop={handleBarDrop}
           >
-            <DragHandle
-              label={`Drag ${tab.label} to reorder`}
-              onDragStart={(e) => handleTabDragStart(tab, e)}
-              onDragEnd={handleDragEnd}
-            />
             <button
               type="button"
-              className="camera-tab-select"
+              draggable
+              className="camera-tab-select draggable-row"
               onClick={() => onSelectTab(tab.id)}
+              onDragStart={(e) => handleTabDragStart(tab, e)}
+              onDragEnd={handleDragEnd}
               aria-current={active ? 'page' : undefined}
+              title={`${tab.label} — click to select, drag to reorder`}
             >
+              <span className="drag-handle-icon" aria-hidden="true">⠿</span>
               {tab.type === 'segment' && tab.segment?.id ? (
                 <SegmentPreview
                   segmentId={tab.segment.id}
@@ -198,6 +197,7 @@ export default function CameraTabs({
               ) : cam ? (
                 <CameraPreview
                   cameraId={cam.id}
+                  streamUrl={cam.rtspUrl}
                   streaming={cam.status === 'live' || cam.recording}
                   size="sm"
                 />

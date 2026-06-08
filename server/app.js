@@ -10,6 +10,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
+import { isHttpStreamUrl } from './ffmpegArgs.js';
+import { fetchHttpPreviewJpeg } from './httpPreviewFrame.js';
 import { checkFfmpeg } from './ffmpegUtil.js';
 import {
   createRateLimiter,
@@ -204,7 +206,9 @@ export function createApp() {
       const recordingsChanged = updated.recordingsDir !== previous.recordingsDir;
       const retentionChanged = updated.retentionDays !== previous.retentionDays;
       if (segmentChanged || recordingsChanged) {
-        restartActiveRecordings();
+        restartActiveRecordings().catch((err) => {
+          console.error('[settings] failed to restart recordings:', err.message);
+        });
       }
       if (retentionChanged) {
         purgeExpiredRecordings();
@@ -220,7 +224,7 @@ export function createApp() {
     res.json(listCameras().map(sanitizeCamera));
   });
 
-  app.post('/api/cameras', strictRateLimiter, (req, res) => {
+  app.post('/api/cameras', strictRateLimiter, async (req, res) => {
     const { name, rtspUrl } = req.body ?? {};
     let validatedUrl;
     try {
@@ -230,12 +234,23 @@ export function createApp() {
     }
     const id = uuidv4();
     try {
-      const camera = addCamera({
+      addCamera({
         id,
         name: name?.trim() || 'Camera',
         rtspUrl: validatedUrl,
       });
-      res.status(201).json(sanitizeCamera(camera));
+
+      const ffmpeg = checkFfmpeg();
+      if (ffmpeg.available) {
+        try {
+          await startLive(id);
+        } catch (startErr) {
+          const cam = getCamera(id);
+          if (cam) cam.error = startErr.message;
+        }
+      }
+
+      res.status(201).json(sanitizeCamera(getCamera(id)));
     } catch (e) {
       res.status(400).json({ error: e.message });
     }
@@ -249,7 +264,7 @@ export function createApp() {
     res.json({ ok: true });
   });
 
-  app.post('/api/cameras/:id/start', (req, res) => {
+  app.post('/api/cameras/:id/start', async (req, res) => {
     try {
       const ffmpeg = checkFfmpeg();
       if (!ffmpeg.available) {
@@ -257,7 +272,7 @@ export function createApp() {
           error: 'FFmpeg is not installed. Install FFmpeg and restart the server.',
         });
       }
-      const cam = startAll(req.params.id);
+      const cam = await startAll(req.params.id);
       res.json(sanitizeCamera(cam));
     } catch (e) {
       res.status(400).json({ error: e.message });
@@ -273,7 +288,7 @@ export function createApp() {
     }
   });
 
-  app.post('/api/cameras/:id/live/start', (req, res) => {
+  app.post('/api/cameras/:id/live/start', async (req, res) => {
     try {
       const ffmpeg = checkFfmpeg();
       if (!ffmpeg.available) {
@@ -281,7 +296,7 @@ export function createApp() {
           error: 'FFmpeg is not installed. Install FFmpeg and restart the server.',
         });
       }
-      res.json(sanitizeCamera(startLive(req.params.id)));
+      res.json(sanitizeCamera(await startLive(req.params.id)));
     } catch (e) {
       res.status(400).json({ error: e.message });
     }
@@ -292,7 +307,7 @@ export function createApp() {
     res.json(sanitizeCamera(getCamera(req.params.id)));
   });
 
-  app.post('/api/cameras/:id/record/start', (req, res) => {
+  app.post('/api/cameras/:id/record/start', async (req, res) => {
     try {
       const ffmpeg = checkFfmpeg();
       if (!ffmpeg.available) {
@@ -300,7 +315,7 @@ export function createApp() {
           error: 'FFmpeg is not installed. Install FFmpeg and restart the server.',
         });
       }
-      res.json(sanitizeCamera(startRecording(req.params.id)));
+      res.json(sanitizeCamera(await startRecording(req.params.id)));
     } catch (e) {
       res.status(400).json({ error: e.message });
     }
@@ -309,6 +324,22 @@ export function createApp() {
   app.post('/api/cameras/:id/record/stop', (req, res) => {
     stopRecording(req.params.id);
     res.json(sanitizeCamera(getCamera(req.params.id)));
+  });
+
+  app.get('/api/cameras/:id/preview.jpg', apiRateLimiter, async (req, res) => {
+    const cam = getCamera(req.params.id);
+    if (!cam) return res.status(404).json({ error: 'Camera not found' });
+    if (!isHttpStreamUrl(cam.rtspUrl)) {
+      return res.status(404).json({ error: 'Preview not available for this stream type' });
+    }
+    try {
+      const jpeg = await fetchHttpPreviewJpeg(cam.rtspUrl);
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Cache-Control', 'no-store');
+      res.send(jpeg);
+    } catch (e) {
+      res.status(502).json({ error: e.message });
+    }
   });
 
   app.get('/api/cameras/:id/recordings', (req, res) => {

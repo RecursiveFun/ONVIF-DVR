@@ -1,8 +1,10 @@
 # ONVIF DVR
 
-A self-hosted DVR and live-view application for IP cameras. Connect RTSP streams (manually or via ONVIF discovery), watch live HLS in the browser, record rolling 5-minute MP4 segments, and play back footage with a multi-tab interface that remembers your place.
+A self-hosted DVR and live-view application for IP cameras. Connect **RTSP** or **HTTP/HTTPS** streams (manually or via ONVIF discovery), watch live HLS in the browser, record rolling MP4 segments, and play back footage with a multi-tab workspace that remembers your place.
 
-Built with **Node.js + Express** on the backend and **React + Vite + Material UI** on the frontend. FFmpeg handles all stream ingest, transcoding, and segment writing.
+Built with **Node.js + Express** on the backend and **React + Vite + Material UI** on the frontend. FFmpeg handles stream ingest, transcoding, and segment writing.
+
+Additional documentation and screenshot regeneration notes: [`docs/README.md`](docs/README.md).
 
 ---
 
@@ -10,7 +12,7 @@ Built with **Node.js + Express** on the backend and **React + Vite + Material UI
 
 ### Live view
 
-HLS live preview with camera tabs, recording controls, and a zoomable timeline. Wheel over the bar to zoom in; the header shows the visible time range. The red dot beside **Live** in the sidebar indicates active recording.
+HLS live preview with camera tabs, recording controls, and a zoomable timeline. Wheel over the bar to zoom in; the header shows the visible time range. A red dot beside **Live** indicates active recording.
 
 ![Live view with camera tabs and timeline](docs/screenshots/live-view.png)
 
@@ -22,13 +24,19 @@ Open any segment in its own tab. Scrub with the progress bar, change playback sp
 
 ### Multiview
 
-Watch multiple cameras at once in a grid. Select cameras from the sidebar, open any tile for the full camera page, or remove a tile with the **×** in the upper-right corner (does not delete the camera).
+Watch multiple cameras in a fixed **2×2 through 6×6** grid. Pick a grid size, click or **drag** cameras from the sidebar into empty slots, open any tile for the full camera page, or remove a tile with **×** (does not delete the camera).
 
-![Multiview grid with live camera tiles](docs/screenshots/multiview.png)
+![Multiview grid with size selector and live tiles](docs/screenshots/multiview.png)
+
+### Add camera (stream URL)
+
+Paste an **RTSP**, **RTSPS**, or **HTTP/HTTPS** URL (including MJPEG `cgi-bin` links). Live view starts automatically after adding.
+
+![Stream URL panel with RTSP and HTTP support](docs/screenshots/stream-url.png)
 
 ### ONVIF discovery
 
-Add cameras by pasting an RTSP URL or using ONVIF — scan the network, connect by IP, and auto-fill the stream URI.
+Scan the network, connect by IP, enter ONVIF credentials, and auto-fill the stream URI.
 
 ![ONVIF discovery panel in the sidebar](docs/screenshots/onvif-discovery.png)
 
@@ -44,8 +52,11 @@ Configure segment duration, retention, recordings folder, theme, and view disk u
 
 ### Live viewing
 - Low-latency **HLS** live preview in the browser (via [hls.js](https://github.com/video-dev/hls.js))
+- **RTSP/RTSPS** and **HTTP/HTTPS** camera URLs (MJPEG and multipart JPEG streams)
+- **Auto-start live** when a camera is added (if FFmpeg is available)
 - Separate controls for **live only**, **record only**, or **watch & record**
 - Live preview thumbnails in the sidebar and tab bar
+- HTTP streams auto-reconnect on brief disconnects; live and recording pipelines restart if FFmpeg exits
 
 ### DVR recording
 - Continuous recording in **configurable MP4 segments** (default 5 minutes; fragmented MP4 for browser seeking)
@@ -64,14 +75,16 @@ Configure segment duration, retention, recordings folder, theme, and view disk u
 - Speed controls (0.5×–4×), skip ±10s, volume, and fullscreen
 
 ### Multi-tab workspace
-- **Tabs** or **Multiview** layout — multiview shows a grid of live tiles with per-tile remove controls; camera selections persist
-- Browser-style **camera tabs** with drag-to-reorder and drag-to-duplicate
+- **Tabs** or **Multiview** layout — multiview uses configurable **2×2–6×6** grids with drag-to-fill empty slots; selections persist
+- Browser-style **camera tabs** with drag-to-reorder and drag-to-duplicate (whole tab is draggable)
 - **Segment tabs** pinned to a specific recording (`Camera · timestamp`)
 - Tab layout, active tab, multiview selection, and scrub positions persist in **localStorage**
 - Going **Live** from a segment tab renames it back to a camera tab (with duplicate numbering like `C120 (2)`)
 
 ### Camera management
-- Add cameras with a name and RTSP URL
+- Add cameras with a name and stream URL (**RTSP/RTSPS** or **HTTP/HTTPS**)
+- HTML-encoded query strings in URLs are normalized (`&amp;` → `&`)
+- HTTP cameras are probed on first live start to pick the right FFmpeg demuxer (`mjpeg`, `mpjpeg`, or auto)
 - **ONVIF discovery** — scan the network, probe by IP, fetch stream URIs
 - Remove cameras (stops streams and deletes from the list)
 - Delete individual recording segments from playback (with confirmation)
@@ -117,7 +130,7 @@ flowchart TB
     DVR[recordings/]
   end
 
-  Camera[(RTSP camera)] -->|TCP| SM
+  Camera[(RTSP / HTTP camera)] --> SM
   SM --> HLS --> LIVE
   SM --> MP4 --> DVR
   UI -->|/api /live| API
@@ -134,8 +147,10 @@ flowchart TB
 | **server/streamManager.js** | Camera state, FFmpeg child processes, session restore |
 | **server/recordings.js** | Segment listing, timeline, retention, file serving |
 | **server/onvifService.js** | WS-Discovery, host probe, stream URI lookup |
-| **server/ffmpegArgs.js** | Shared FFmpeg argument builders |
-| **server/security.js** | Path validation, RTSP/ONVIF input checks, response sanitization, rate limits |
+| **server/ffmpegArgs.js** | Shared FFmpeg argument builders (RTSP + HTTP) |
+| **server/httpStreamProbe.js** | HTTP MJPEG format detection and demuxer fallback |
+| **server/ffmpegUtil.js** | FFmpeg spawn, path resolution, benign log filtering |
+| **server/security.js** | Path validation, stream URL / ONVIF input checks, response sanitization, rate limits |
 | **data/** | Runtime storage (gitignored in production use) |
 
 ---
@@ -229,9 +244,9 @@ For production, configure your reverse proxy (nginx, Caddy, etc.) to:
 
 1. Expand **Add Camera** in the sidebar.
 2. Either:
-   - **Scan / probe via ONVIF** — enter credentials, discover devices, pick a stream URI, or
-   - **Paste an RTSP URL** directly (`rtsp://user:pass@192.168.1.100:554/...`)
-3. Click **Add Camera**. A new tab opens for that camera.
+   - **Stream URL** — paste an RTSP or HTTP URL, e.g. `rtsp://user:pass@192.168.1.100:554/...` or `http://192.168.1.100/cgi-bin/camera?...`
+   - **ONVIF Discovery** — enter credentials, scan the network or connect by IP, fetch a stream URI
+3. Click **Add Camera**. A new tab opens and **live view starts automatically**.
 
 ### Watching live
 
@@ -247,9 +262,10 @@ Switch between **Live** and **Playback** with the mode toggle in the toolbar. On
 ### Multiview
 
 1. Switch the toolbar to **Multiview**.
-2. Click cameras in the sidebar to show or hide them in the grid.
-3. Click a tile to open that camera in full **Tabs** view.
-4. Click **×** on a tile to remove it from the grid without deleting the camera.
+2. Choose a grid size (**2×2** through **6×6**).
+3. Click cameras in the sidebar, or **drag** a camera onto an empty slot.
+4. Click a tile to open that camera in full **Tabs** view.
+5. Click **×** on a tile to remove it from the grid without deleting the camera.
 
 ### Playing back recordings
 
@@ -290,7 +306,7 @@ All runtime data lives under `data/` (created automatically):
 
 ```
 data/
-├── cameras.json          # Persisted camera list (id, name, rtspUrl)
+├── cameras.json          # Persisted camera list (id, name, rtspUrl, httpInputFormat?)
 ├── sessions.json         # Which cameras were live/recording on last shutdown
 ├── settings.json         # Segment duration, retention, recordings folder path
 ├── live/
@@ -405,7 +421,7 @@ ONVIF DVR is designed as a **local-first** app. By default the API binds to **lo
 | **Localhost bind** | Server listens on `127.0.0.1` unless `HOST` is set |
 | **CORS** | Allows localhost and private LAN IPs (`10.x`, `172.16–31.x`, `192.168.x`) by default; set `CORS_ORIGINS` for other origins |
 | **Path traversal** | Recording paths and folder browser are validated against allowlisted roots |
-| **Input validation** | RTSP URLs and ONVIF hostnames are validated before use |
+| **Input validation** | RTSP/HTTP stream URLs and ONVIF hostnames are validated before use |
 | **SSRF mitigation** | Cloud metadata hostnames are blocked for ONVIF probe/connect |
 | **Credential masking** | Camera API responses mask RTSP usernames/passwords |
 | **Rate limiting** | API and ONVIF endpoints are rate-limited |
@@ -421,6 +437,7 @@ There is **no built-in authentication**. If you expose the server beyond localho
 | `onvif-dvr-theme` | `light` or `dark` |
 | `onvif-dvr-view-mode` | `tabs` or `multiview` |
 | `onvif-dvr-multiview-cameras` | Camera IDs shown in multiview |
+| `onvif-dvr-multiview-grid-size` | Multiview grid dimension (2–6) |
 | `onvif-dvr-volume` | Last player volume |
 
 ---
@@ -437,6 +454,7 @@ npm run build            # production client build
 npm test                 # all tests (server + client)
 npm run test:server      # Node test runner
 npm run test:client      # Vitest
+npm run screenshots      # capture docs/screenshots (see docs/README.md)
 npm run setup:hooks      # block local git push when tests fail (once per clone)
 ```
 
@@ -474,11 +492,12 @@ client/src/
 │   ├── DVRPlayer.jsx       # Playback player
 │   ├── LivePlayer.jsx      # HLS live player
 │   ├── Timeline.jsx        # Zoomable recording timeline
-│   ├── MultiviewGrid.jsx   # Multiview camera grid
-│   ├── AppSettings.jsx     # Settings panel
+│   ├── MultiviewGrid.jsx           # Multiview camera grid
+│   ├── MultiviewGridSizeToggle.jsx # 2×2–6×6 grid picker
+│   ├── AppSettings.jsx             # Settings panel
 │   └── ...
-├── hooks/                  # useTheme, useMediaControls
-└── utils/                  # tabSession, segments, multiviewSelection, playback, dragPayload
+├── hooks/                          # useTheme, useMediaControls, useTimelineScrub
+└── utils/                          # tabSession, segments, multiviewGrid, multiviewSelection, playback, dragPayload
 ```
 
 ### Server structure
@@ -490,8 +509,9 @@ server/
 ├── streamManager.js   # Cameras, FFmpeg processes, persistence
 ├── recordings.js      # Segment files, timeline, retention
 ├── onvifService.js    # ONVIF discovery and stream URIs
-├── ffmpegArgs.js      # FFmpeg argument builders
-├── ffmpegUtil.js      # FFmpeg path resolution (incl. winget on Windows)
+├── ffmpegArgs.js      # FFmpeg argument builders (RTSP + HTTP)
+├── ffmpegUtil.js      # FFmpeg spawn, path resolution, log filtering
+├── httpStreamProbe.js # HTTP MJPEG format probe and demuxer fallback
 └── security.js        # Path checks, validation, sanitization, rate limits
 ```
 
@@ -499,7 +519,7 @@ server/
 
 ## Testing
 
-The project has **149 automated tests** (61 server, 88 client) covering utilities, API integration, security helpers, and React components.
+The project has **170 automated tests** (70 server, 100 client) covering utilities, API integration, security helpers, HTTP stream probing, and React components.
 
 ```bash
 npm test
@@ -507,8 +527,8 @@ npm test
 
 | Suite | Runner | What's covered |
 |-------|--------|----------------|
-| **Server unit** | `node --test` | FFmpeg args, segment parsing, file paths, retention, security helpers |
-| **Server integration** | Supertest | Health, camera CRUD, recordings, ONVIF validation |
+| **Server unit** | `node --test` | FFmpeg args/util, HTTP probe, segment parsing, file paths, retention, security helpers |
+| **Server integration** | Supertest | Health, camera CRUD (incl. HTTP URLs), recordings, ONVIF validation |
 | **Client unit** | Vitest | Tab labels, session storage, drag payloads, playback helpers |
 | **Client components** | Vitest + Testing Library | CameraList, CameraTabs, Timeline, MultiviewGrid, CameraPageView |
 
@@ -530,9 +550,15 @@ cd server && npm run test:integration
 - On Windows after winget install, restart the terminal or IDE
 
 ### Live stream won't play
-- Confirm the RTSP URL works in VLC or ffplay
-- Check the server console for FFmpeg errors
-- Some cameras need TCP transport (already configured) or a sub-stream path
+- Confirm the stream URL works in VLC or ffplay
+- Check the server console for FFmpeg errors (benign HTTP reconnect messages are filtered)
+- RTSP: some cameras need TCP transport (already configured) or a sub-stream path
+- HTTP MJPEG: try removing and re-adding the camera if `httpInputFormat` in `data/cameras.json` is wrong; the server probes `mjpeg` → `mpjpeg` → `auto` on first connect
+
+### HTTP camera disconnects or "End of file" in logs
+- Many MJPEG cameras close the connection periodically; FFmpeg reconnects automatically
+- If live or recording stops, the server schedules a pipeline restart for HTTP cameras
+- These reconnect messages are normal and are no longer echoed to the console
 
 ### Recording segments won't seek
 - New recordings use fragmented MP4 (`movflags=+frag_keyframe`) for browser compatibility

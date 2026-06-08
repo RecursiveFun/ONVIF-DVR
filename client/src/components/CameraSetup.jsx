@@ -1,5 +1,5 @@
 /**
- * Sidebar "Add Camera" panel with two paths: paste an RTSP URL or discover via ONVIF.
+ * Sidebar "Add Camera" panel: paste a stream URL (RTSP or HTTP) or discover via ONVIF.
  *
  * ONVIF flow: scan the network, pick a device, fetch its stream URI, then submit.
  * Credentials are shared across discovery and connect-by-IP but separate from RTSP URL auth.
@@ -158,7 +158,7 @@ export default function CameraSetup({ onAdded }) {
         variant="fullWidth"
         sx={{ mb: 2, minHeight: 36 }}
       >
-        <Tab label="RTSP URL" value="manual" sx={{ minHeight: 36, py: 0.5 }} />
+        <Tab label="Stream URL" value="manual" sx={{ minHeight: 36, py: 0.5 }} />
         <Tab label="ONVIF Discovery" value="onvif" sx={{ minHeight: 36, py: 0.5 }} />
       </Tabs>
 
@@ -173,13 +173,14 @@ export default function CameraSetup({ onAdded }) {
             placeholder="Front Door"
           />
           <TextField
-            label="RTSP URL"
+            label="Stream URL"
             size="small"
             fullWidth
             required
             value={rtspUrl}
             onChange={(e) => setRtspUrl(e.target.value)}
             placeholder="rtsp://user:pass@192.168.1.100:554/stream1"
+            helperText="RTSP/RTSPS or HTTP/HTTPS (e.g. MJPEG cgi-bin links). Live view starts automatically after adding."
           />
           <Button type="submit" variant="contained" disabled={loading}>
             {loading ? 'Adding…' : 'Add Camera'}

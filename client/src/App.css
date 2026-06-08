@@ -113,6 +113,10 @@
   background: var(--bg);
 }
 
+.main-panel.multiview-mode {
+  overflow: hidden;
+}
+
 .main-panel-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -138,7 +142,8 @@
   font-size: 0.8rem;
 }
 
-.view-mode-toggle {
+.view-mode-toggle,
+.multiview-grid-size-toggle {
   flex-shrink: 0;
   margin-bottom: 0.75rem;
 }
@@ -146,23 +151,100 @@
 /* --- Multiview grid --- */
 
 .multiview-grid {
-  flex: 1;
+  flex: 1 1 auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
-  gap: 0.85rem;
-  padding: 1rem 1.5rem 1.5rem;
-  overflow: auto;
+  gap: var(--multiview-gap, 0.5rem);
+  padding: var(--multiview-pad, 0.5rem);
+  overflow: hidden;
   min-height: 0;
-  align-content: start;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.multiview-grid.layout-sized {
+  --multiview-gap: clamp(0.25rem, 0.35vw, 0.65rem);
+  --multiview-pad: clamp(0.35rem, 0.5vw, 0.75rem);
+  grid-template-columns: repeat(var(--grid-size), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--grid-size), minmax(0, 1fr));
+  align-content: stretch;
+  align-items: stretch;
+  justify-items: stretch;
+}
+
+.multiview-grid.layout-sized > .multiview-tile,
+.multiview-grid.layout-sized > .multiview-slot-empty {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.multiview-drop-zone {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.multiview-drop-zone.dragging-active,
+.multiview-drop-zone.drop-hover {
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+  background: var(--accent-soft);
+}
+
+.multiview-drop-hint {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .multiview-empty {
   margin: 1.5rem;
 }
 
+.multiview-tile,
+.multiview-slot-empty {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.multiview-slot-empty {
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+  background: var(--surface-2);
+}
+
+.multiview-slot-empty.drop-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.multiview-slot-empty.compact .MuiTypography-root {
+  font-size: 0.75rem;
+}
+
+.multiview-tile.compact .multiview-placeholder {
+  font-size: 0.7rem;
+  padding: 0.35rem;
+}
+
 .multiview-tile-viewer {
-  display: block;
+  position: relative;
   width: 100%;
+  height: 100%;
   padding: 0;
   margin: 0;
   border: none;
@@ -170,7 +252,8 @@
   overflow: hidden;
   background: var(--video-bg);
   cursor: pointer;
-  aspect-ratio: 16 / 9;
+  flex: 1;
+  min-height: 0;
 }
 
 .multiview-tile-viewer:hover {
@@ -180,14 +263,57 @@
 
 .multiview-tile-viewer .live-player-wrap,
 .multiview-tile-viewer .placeholder {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   min-height: 0;
 }
 
+.multiview-tile-viewer .video-player {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.multiview-tile-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 2.25rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.2) 70%, transparent 100%);
+  pointer-events: none;
+}
+
+.multiview-tile-name {
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+  min-width: 0;
+}
+
+.multiview-tile.compact .multiview-tile-header {
+  padding: 0.2rem 0.35rem;
+  right: 2rem;
+}
+
+.multiview-tile.compact .multiview-tile-name {
+  font-size: 0.75rem;
+}
+
+.multiview-tile.compact .multiview-tile-header .MuiChip-root {
+  height: 1.25rem;
+  font-size: 0.65rem;
+}
+
 .multiview-placeholder {
-  font-size: 0.85rem;
-  padding: 1rem;
+  font-size: clamp(0.65rem, 1.2vw, 0.85rem);
+  padding: 0.5rem;
 }
 
 .camera-tab-drop-zone.end {
@@ -277,14 +403,12 @@
   border-color: var(--border);
 }
 
-.camera-tab .drag-handle {
-  margin-left: 0.35rem;
-}
-
 .camera-tab-select {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  flex: 1;
+  min-width: 0;
   padding: 0.55rem 0.5rem 0.55rem 0.35rem;
   background: transparent;
   color: inherit;
@@ -300,6 +424,14 @@
 
 .camera-tab.active .camera-tab-select {
   font-weight: 600;
+}
+
+.camera-tab .camera-tab-select.draggable-row {
+  cursor: grab;
+}
+
+.camera-tab .camera-tab-select.draggable-row:active {
+  cursor: grabbing;
 }
 
 .camera-tab-close {
@@ -354,6 +486,15 @@
 
 .camera-preview.offline {
   background: var(--surface-2);
+}
+
+.camera-preview-source {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
 }
 
 .camera-preview-video,
@@ -531,22 +672,31 @@
 .timeline-list-row {
   display: flex;
   align-items: stretch;
-  gap: 0.25rem;
 }
 
-.camera-page-row .MuiListItemButton-root {
-  flex: 1;
-  min-width: 0;
-}
-
-.timeline-list-row .drag-handle {
-  align-self: center;
-  margin-left: 0.15rem;
-}
-
+.camera-page-row .MuiListItemButton-root,
 .timeline-list-row .MuiListItemButton-root {
   flex: 1;
   min-width: 0;
+}
+
+.drag-handle-icon {
+  flex-shrink: 0;
+  width: 1.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1;
+  user-select: none;
+}
+
+.camera-page-row .draggable-row,
+.timeline-list-row .draggable-row {
+  cursor: grab;
+}
+
+.camera-page-row .draggable-row:active,
+.timeline-list-row .draggable-row:active {
+  cursor: grabbing;
 }
 
 .draggable-item {

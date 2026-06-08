@@ -16,7 +16,6 @@ import Typography from '@mui/material/Typography';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatLocalTime } from '../api.js';
 import { useTimelineScrub } from '../hooks/useTimelineScrub.js';
-import DragHandle from './DragHandle.jsx';
 import { setSegmentDragData } from '../utils/dragPayload.js';
 import { DEFAULT_RETENTION_DAYS, formatRetentionLabel } from '../utils/retention.js';
 import { DEFAULT_SEGMENT_DURATION_SEC, formatSegmentDurationLabel } from '../utils/segmentDuration.js';
@@ -515,16 +514,17 @@ export default function Timeline({
                 <List dense disablePadding className="timeline-list">
                   {group.segments.map((seg) => (
                     <ListItem key={seg.id} disablePadding className="timeline-list-row" secondaryAction={null}>
-                      <DragHandle
-                        label="Drag segment to open a new tab"
+                      <ListItemButton
+                        draggable
+                        selected={seg.id === selectedId}
+                        className="draggable-row"
+                        onClick={() => onSelect(seg)}
                         onDragStart={(e) => handleSegmentDragStart(seg, e)}
                         onDragEnd={onDragEnd}
-                      />
-                      <ListItemButton
-                        selected={seg.id === selectedId}
-                        onClick={() => onSelect(seg)}
-                        sx={{ flex: 1 }}
+                        title="Click to open, drag to open a new tab"
+                        sx={{ flex: 1, gap: 0.5 }}
                       >
+                        <span className="drag-handle-icon" aria-hidden="true">⠿</span>
                         <ListItemText
                           primary={formatSegmentTime(seg)}
                           secondary={`${(seg.sizeBytes / 1024 / 1024).toFixed(1)} MB`}

@@ -3,10 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import Timeline from './Timeline.jsx';
 
-vi.mock('./DragHandle.jsx', () => ({
-  default: () => <span data-testid="drag-handle" />,
-}));
-
 const segments = [
   {
     id: 'cam-1/2026-06-08_14-30-00.mp4',

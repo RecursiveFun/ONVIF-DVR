@@ -9,6 +9,7 @@ import {
   maskRtspUrl,
   parseByteRange,
   validateOnvifHostname,
+  normalizeStreamUrl,
   validateRtspUrl,
 } from './security.js';
 
@@ -35,10 +36,26 @@ describe('security helpers', () => {
     assert.equal(resolved, path.resolve(root, 'camera-id/clip.mp4'));
   });
 
-  it('validates rtsp urls', () => {
+  it('validates rtsp and http stream urls', () => {
     assert.equal(validateRtspUrl('rtsp://camera.local/stream1'), 'rtsp://camera.local/stream1');
-    assert.throws(() => validateRtspUrl('http://camera.local/stream1'), /rtsp/i);
-    assert.throws(() => validateRtspUrl('file:///etc/passwd'), /rtsp/i);
+    assert.equal(
+      validateRtspUrl('http://203.181.0.118:6003/cgi-bin/camera?resolution=640&quality=1'),
+      'http://203.181.0.118:6003/cgi-bin/camera?resolution=640&quality=1',
+    );
+    assert.throws(() => validateRtspUrl('file:///etc/passwd'), /stream url/i);
+    assert.throws(() => validateRtspUrl('ftp://camera.local/stream1'), /stream url/i);
+  });
+
+  it('normalizes html-encoded stream urls', () => {
+    const encoded = 'http://203.181.0.118:6003/cgi-bin/camera?resolution=640&amp;amp;quality=1&amp;amp;Language=0';
+    assert.equal(
+      validateRtspUrl(encoded),
+      'http://203.181.0.118:6003/cgi-bin/camera?resolution=640&quality=1&Language=0',
+    );
+    assert.equal(
+      normalizeStreamUrl('rtsp://cam.local/a&amp;b'),
+      'rtsp://cam.local/a&b',
+    );
   });
 
   it('blocks metadata hostnames for onvif', () => {
@@ -50,6 +67,10 @@ describe('security helpers', () => {
     assert.equal(
       maskRtspUrl('rtsp://user:pass@10.0.0.5/stream1'),
       'rtsp://****:****@10.0.0.5/stream1',
+    );
+    assert.equal(
+      maskRtspUrl('http://user:pass@10.0.0.5/cgi-bin/camera'),
+      'http://****:****@10.0.0.5/cgi-bin/camera',
     );
   });
 

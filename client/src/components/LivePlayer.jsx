@@ -3,7 +3,7 @@
  * Polls until the server playlist exists, then attaches hls.js (or native HLS on Safari).
  */
 import { useEffect, useRef, useState } from 'react';
-import Hls from 'hls.js';
+import { loadHls } from '../utils/loadHls.js';
 import MediaToolbar from './MediaToolbar.jsx';
 import FullscreenButton from './FullscreenButton.jsx';
 import { useMediaControls } from '../hooks/useMediaControls.js';
@@ -58,6 +58,9 @@ export default function LivePlayer({ src, active, compact = false }) {
         setStatus('waiting');
         return undefined;
       }
+
+      const Hls = await loadHls();
+      if (cancelled) return undefined;
 
       if (Hls.isSupported()) {
         const hls = new Hls({

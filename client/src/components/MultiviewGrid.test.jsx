@@ -1,7 +1,8 @@
-import { renderWithTheme as render, screen } from '../test/renderWithTheme.jsx';
+import { fireEvent, renderWithTheme as render, screen } from '../test/renderWithTheme.jsx';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import MultiviewGrid from './MultiviewGrid.jsx';
+import { DRAG_MIME } from '../utils/dragPayload.js';
 
 vi.mock('../api.js', () => ({
   api: {
@@ -57,15 +58,50 @@ describe('MultiviewGrid', () => {
     expect(onRemoveCamera).toHaveBeenCalledWith('cam-2');
   });
 
-  it('shows a hint when no cameras are selected', () => {
+  it('renders empty slots for an unfilled grid', () => {
     render(
       <MultiviewGrid
         cameras={cameras}
         selectedIds={[]}
+        gridSize={2}
         onOpenCamera={vi.fn()}
       />,
     );
 
-    expect(screen.getByText(/no cameras selected for multiview/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/empty slot/i)).toHaveLength(4);
+  });
+
+  it('adds a camera when dropped on the grid', () => {
+    const onCameraDrop = vi.fn();
+    const onDragEnd = vi.fn();
+
+    render(
+      <MultiviewGrid
+        cameras={cameras}
+        selectedIds={[]}
+        dragging
+        onCameraDrop={onCameraDrop}
+        onDragEnd={onDragEnd}
+        onOpenCamera={vi.fn()}
+      />,
+    );
+
+    const dropZone = screen.getByLabelText(/camera multiview 2 by 2/i);
+    const payload = JSON.stringify({ type: 'camera', cameraId: 'cam-2' });
+
+    fireEvent.dragOver(dropZone, {
+      dataTransfer: {
+        types: [DRAG_MIME],
+        dropEffect: 'copy',
+      },
+    });
+    fireEvent.drop(dropZone, {
+      dataTransfer: {
+        getData: (type) => (type === DRAG_MIME ? payload : ''),
+      },
+    });
+
+    expect(onCameraDrop).toHaveBeenCalledWith('cam-2');
+    expect(onDragEnd).toHaveBeenCalled();
   });
 });
