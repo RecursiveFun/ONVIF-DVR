@@ -1,3 +1,6 @@
+/**
+ * Light / dark theme switcher in the app header.
+ */
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import ToggleButton from '@mui/material/ToggleButton';
@@ -11,6 +14,7 @@ export default function ThemeToggle({ theme, onChange }) {
       size="small"
       value={theme}
       onChange={(_event, value) => {
+        // Exclusive group passes null when the active button is clicked again.
         if (value) onChange(value);
       }}
       aria-label="Color theme"

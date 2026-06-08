@@ -1,3 +1,7 @@
+/**
+ * Catches render errors in child trees and shows a recoverable fallback
+ * instead of blanking the whole app.
+ */
 import { Component } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';

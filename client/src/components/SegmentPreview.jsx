@@ -1,14 +1,28 @@
+/**
+ * Still thumbnail from a recorded segment at a given offset.
+ *
+ * Loads the MP4 in a hidden video element, seeks, then draws one frame to a canvas.
+ * Used for segment tab icons and timeline hover previews.
+ */
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 
+/** Debounce seek captures while scrubbing so we do not decode on every pointer move. */
 const THUMB_DEBOUNCE_MS = 500;
 
+/**
+ * @param {object} props
+ * @param {string} props.segmentId
+ * @param {number} [props.time] - Offset in seconds within the segment.
+ * @param {'sm'|'md'|'lg'} [props.size]
+ */
 export default function SegmentPreview({ segmentId, time = 0, size = 'sm' }) {
   const [src, setSrc] = useState(null);
   const [failed, setFailed] = useState(false);
   const lastSegmentIdRef = useRef(null);
   const targetTime = Math.max(0, Number.isFinite(time) ? time : 0);
 
+  // Reset cached image when switching to a different segment.
   useEffect(() => {
     if (lastSegmentIdRef.current !== segmentId) {
       lastSegmentIdRef.current = segmentId;
@@ -17,6 +31,7 @@ export default function SegmentPreview({ segmentId, time = 0, size = 'sm' }) {
     }
   }, [segmentId]);
 
+  // Hidden video → seek → canvas JPEG; debounced when time > 0 (scrubbing).
   useEffect(() => {
     if (!segmentId) return undefined;
 

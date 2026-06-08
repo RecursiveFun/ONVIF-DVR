@@ -1,8 +1,14 @@
+/**
+ * Which cameras appear in multiview grid mode.
+ * Selection is persisted and pruned when cameras are removed.
+ */
+
 export const STORAGE_KEY = 'onvif-dvr-multiview-cameras';
 
 export function normalizeMultiviewIds(ids, cameraIds) {
   const allowed = new Set(cameraIds);
   if (!Array.isArray(ids)) return cameraIds.filter((id) => allowed.has(id));
+
   const seen = new Set();
   const next = [];
   for (const id of ids) {
@@ -33,6 +39,7 @@ export function saveMultiviewIds(ids) {
   }
 }
 
+/** Always keep at least one camera visible — do not allow deselecting the last tile. */
 export function toggleMultiviewId(ids, cameraId) {
   if (ids.includes(cameraId)) {
     const next = ids.filter((id) => id !== cameraId);

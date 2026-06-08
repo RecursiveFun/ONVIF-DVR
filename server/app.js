@@ -1,3 +1,9 @@
+/**
+ * Express application factory for the ONVIF-DVR API and optional static UI.
+ *
+ * Wires middleware, HLS live segments, REST routes (health, storage, settings,
+ * cameras, recordings, ONVIF discovery), and SPA fallback when SERVE_CLIENT is set.
+ */
 import cors from 'cors';
 import express from 'express';
 import fs from 'fs';
@@ -91,15 +97,18 @@ const strictRateLimiter = createStrictRateLimiter({ windowMs: 60_000, max: 60 })
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIST = path.join(SERVER_DIR, '..', 'client', 'dist');
 
+/** Build and configure the Express app (no listen). */
 export function createApp() {
   const app = express();
   app.set('trust proxy', 1);
 
+  // --- Global middleware ---
   app.use(cors(getCorsOptions()));
   app.use(securityHeaders);
   app.use(express.json({ limit: '64kb' }));
   app.use('/api', apiRateLimiter);
 
+  // --- HLS live stream static files ---
   app.use('/live', express.static(LIVE_DIR, {
     setHeaders(res, filePath) {
       res.removeHeader('Cross-Origin-Resource-Policy');
@@ -112,6 +121,7 @@ export function createApp() {
     },
   }));
 
+  // --- Health and storage ---
   app.get('/api/health', (_req, res) => {
     const ffmpeg = checkFfmpeg();
     res.json({ ok: true, ffmpeg: { available: ffmpeg.available } });
@@ -121,6 +131,7 @@ export function createApp() {
     res.json(getStorageStatus());
   });
 
+  // --- Filesystem browser (recordings folder picker) ---
   app.get('/api/fs/roots', (_req, res) => {
     res.json({ roots: listRoots() });
   });
@@ -134,6 +145,7 @@ export function createApp() {
     }
   });
 
+  // --- Settings ---
   app.get('/api/settings', (_req, res) => {
     res.json(getSettings());
   });
@@ -203,6 +215,7 @@ export function createApp() {
     }
   });
 
+  // --- Cameras: CRUD and stream control ---
   app.get('/api/cameras', (_req, res) => {
     res.json(listCameras().map(sanitizeCamera));
   });
@@ -310,6 +323,7 @@ export function createApp() {
     res.json(getTimeline(req.params.id));
   });
 
+  // --- Recordings: playback, timeline, delete ---
   app.delete('/api/recordings/*', (req, res) => {
     const recordingId = decodeURIComponent(req.path.replace(/^\/api\/recordings\//, ''));
     try {
@@ -346,6 +360,7 @@ export function createApp() {
     }
   });
 
+  // --- ONVIF discovery and connection ---
   app.get('/api/onvif/discover', strictRateLimiter, async (_req, res) => {
     try {
       const result = await discoverDevices();
@@ -419,6 +434,7 @@ export function createApp() {
     }
   });
 
+  // --- Built client SPA (LAN mode) ---
   if (process.env.SERVE_CLIENT === 'true') {
     if (!fs.existsSync(path.join(CLIENT_DIST, 'index.html'))) {
       console.warn('[client] SERVE_CLIENT is set but client/dist is missing — run npm run build');

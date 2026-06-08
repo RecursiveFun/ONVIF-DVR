@@ -1,3 +1,8 @@
+/**
+ * Persist open tabs, active tab, history, and per-segment playback positions.
+ * Restored on load so a browser refresh returns to the same workspace.
+ */
+
 const STORAGE_KEY = 'onvif-dvr-tabs';
 
 export function loadTabSession() {
@@ -34,8 +39,13 @@ export function saveTabSession({ tabs, activeTabId, history, playbackPositions }
   }
 }
 
+/**
+ * Reconcile saved tabs with cameras that still exist on the server.
+ * Drops tabs for removed cameras; keeps segment metadata for playback resume.
+ */
 export function restoreTabs(saved, cameras) {
   if (!saved?.tabs) return null;
+
   const cameraIds = new Set(cameras.map((cam) => cam.id));
   const restored = saved.tabs
     .filter((tab) => cameraIds.has(tab.cameraId))
@@ -69,7 +79,6 @@ export function restoreTabs(saved, cameras) {
     ? saved.activeTabId
     : restored[restored.length - 1].id;
   const history = (saved.history || []).filter((id) => restoredIds.has(id));
-
   const playbackPositions = saved.playbackPositions && typeof saved.playbackPositions === 'object'
     ? saved.playbackPositions
     : {};

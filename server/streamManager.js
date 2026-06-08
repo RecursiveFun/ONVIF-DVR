@@ -1,3 +1,10 @@
+/**
+ * Camera registry and FFmpeg process orchestration.
+ *
+ * Persists camera definitions, spawns separate FFmpeg children for HLS live
+ * preview and segmented MP4 recording, tracks session state for restart recovery,
+ * and reacts to low-disk conditions from `storage.js`.
+ */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,6 +18,8 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const LIVE_DIR = path.join(DATA_DIR, 'live');
 const CAMERAS_FILE = path.join(DATA_DIR, 'cameras.json');
 const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
+
+// --- Data directories and startup ---
 
 for (const dir of [DATA_DIR, LIVE_DIR]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -30,6 +39,8 @@ const stopping = new Map();
 /** @type {Map<string, CameraState>} */
 const cameras = new Map();
 
+// --- Camera persistence (cameras.json) ---
+
 function saveCameras() {
   const list = Array.from(cameras.values()).map(({ id, name, rtspUrl }) => ({ id, name, rtspUrl }));
   fs.writeFileSync(CAMERAS_FILE, JSON.stringify(list, null, 2));
@@ -48,6 +59,8 @@ function loadCameras() {
 }
 
 loadCameras();
+
+// --- Session persistence (sessions.json) ---
 
 function readSessionsFile() {
   if (!fs.existsSync(SESSIONS_FILE)) return {};
@@ -103,14 +116,24 @@ function clearCameraError(id) {
   if (cam) cam.error = null;
 }
 
+// --- Camera CRUD ---
+
+/** @returns {CameraState[]} */
 export function listCameras() {
   return Array.from(cameras.values());
 }
 
+/** @param {string} id @returns {CameraState | null} */
 export function getCamera(id) {
   return cameras.get(id) || null;
 }
 
+/**
+ * Register a camera and create its live/recording output directories.
+ * @param {{ id: string, name: string, rtspUrl: string }} camera
+ * @param {{ persist?: boolean }} [options]
+ * @returns {CameraState}
+ */
 export function addCamera({ id, name, rtspUrl }, { persist = true } = {}) {
   if (!cameras.has(id) && cameras.size >= MAX_CAMERAS) {
     throw new Error(`Maximum of ${MAX_CAMERAS} cameras allowed`);
@@ -136,6 +159,7 @@ export function addCamera({ id, name, rtspUrl }, { persist = true } = {}) {
   return state;
 }
 
+/** Stop streams, remove persisted camera and session entries. */
 export function removeCamera(id) {
   stopLive(id);
   stopRecording(id);
@@ -147,6 +171,8 @@ export function removeCamera(id) {
   writeSessionsFile(sessions);
   saveCameras();
 }
+
+// --- FFmpeg helpers ---
 
 function rtspInputArgs(rtspUrl) {
   return [...rtspInputOptions(), '-i', rtspUrl];
@@ -178,6 +204,9 @@ function attachSpawnFailure(id, kind, procs, key) {
   };
 }
 
+// --- Live HLS streaming ---
+
+/** Start FFmpeg HLS output for browser live preview. */
 export function startLive(id) {
   const cam = cameras.get(id);
   if (!cam) throw new Error('Camera not found');
@@ -198,7 +227,7 @@ export function startLive(id) {
     '-f', 'hls',
     '-hls_time', '2',
     '-hls_list_size', '6',
-    '-hls_flags', 'delete_segments+append_list',
+    '-hls_flags', 'delete_segments+append_list+split_by_time',
     '-hls_segment_filename', segmentPattern,
     playlist,
   ];
@@ -238,6 +267,7 @@ export function startLive(id) {
   return cam;
 }
 
+/** Stop the live FFmpeg process for a camera. */
 export function stopLive(id) {
   const procs = processes.get(id);
   const stopState = stopping.get(id);
@@ -256,6 +286,9 @@ export function stopLive(id) {
   persistSession(id);
 }
 
+// --- Segmented MP4 recording ---
+
+/** Start FFmpeg segment recording into the camera's recordings folder. */
 export function startRecording(id) {
   const cam = cameras.get(id);
   if (!cam) throw new Error('Camera not found');
@@ -321,6 +354,7 @@ export function startRecording(id) {
   return cam;
 }
 
+/** Stop the recording FFmpeg process for a camera. */
 export function stopRecording(id) {
   const procs = processes.get(id);
   const stopState = stopping.get(id);
@@ -338,6 +372,9 @@ export function stopRecording(id) {
   persistSession(id);
 }
 
+// --- Session restore and combined controls ---
+
+/** Resume live/recording FFmpeg processes from sessions.json after server restart. */
 export function restoreSessions() {
   const sessions = readSessionsFile();
   const ids = Object.keys(sessions);
@@ -371,6 +408,7 @@ export function restoreSessions() {
   }
 }
 
+/** Start both live preview and recording; rolls back live if recording fails. */
 export function startAll(id) {
   try {
     startLive(id);
@@ -386,13 +424,17 @@ export function startAll(id) {
   return cameras.get(id);
 }
 
+/** Stop live and recording for a camera. */
 export function stopAll(id) {
   stopLive(id);
   stopRecording(id);
 }
 
+// --- Low-disk handling ---
+
 const LOW_DISK_ERROR = 'Recording stopped — disk space critically low';
 
+/** Stop one camera's recorder and surface a low-disk error on its state. */
 export function stopRecordingDueToLowDisk(id) {
   const procs = processes.get(id);
   if (!procs?.record) return;
@@ -401,13 +443,17 @@ export function stopRecordingDueToLowDisk(id) {
   if (cam) cam.error = LOW_DISK_ERROR;
 }
 
+/** Stop every active recording when free disk space is critical. */
 export function stopAllRecordingsDueToLowDisk() {
   for (const [id, procs] of processes) {
     if (procs?.record) stopRecordingDueToLowDisk(id);
   }
 }
 
-/** Restart FFmpeg recorders so a new segment duration takes effect immediately. */
+/**
+ * Restart active FFmpeg recorders so a new segment duration or path takes effect.
+ * Live streams are left running.
+ */
 export function restartActiveRecordings() {
   for (const [id, procs] of processes) {
     if (!procs?.record) continue;

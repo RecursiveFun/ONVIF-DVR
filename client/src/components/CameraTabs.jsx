@@ -1,3 +1,10 @@
+/**
+ * Horizontal tab bar for open camera and segment pages.
+ *
+ * Supports reordering tabs via drag-and-drop and accepting external drops (sidebar
+ * cameras, timeline segments) with a live insert indicator. Tab thumbnails use
+ * CameraPreview or SegmentPreview depending on tab type.
+ */
 import CloseIcon from '@mui/icons-material/Close';
 import IconButton from '@mui/material/IconButton';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -6,6 +13,7 @@ import SegmentPreview from './SegmentPreview.jsx';
 import DragHandle from './DragHandle.jsx';
 import { parseDragPayload, setTabDragData } from '../utils/dragPayload.js';
 
+/** Map pointer position to the tab index where a drop would insert (midpoint split per tab). */
 function getInsertIndex(bar, clientX, clientY) {
   const tabEls = Array.from(bar.querySelectorAll('.camera-tab'));
   if (tabEls.length === 0) return 0;
@@ -21,6 +29,7 @@ function getInsertIndex(bar, clientX, clientY) {
   return tabEls.length;
 }
 
+/** Pixel offset for the vertical insert line, relative to the tab bar. */
 function getIndicatorLeft(bar, insertIndex) {
   const barRect = bar.getBoundingClientRect();
   const tabEls = Array.from(bar.querySelectorAll('.camera-tab'));
@@ -38,6 +47,11 @@ function getIndicatorLeft(bar, insertIndex) {
   return tabEls[insertIndex].getBoundingClientRect().left - barRect.left;
 }
 
+/**
+ * @param {object} props
+ * @param {boolean} [props.dragging] - True when something outside the bar is being dragged (shows drop zones).
+ * @param {Record<string, number>} [props.playbackThumbTimes] - Scrub position per segment for tab thumbnails.
+ */
 export default function CameraTabs({
   tabs,
   cameras,
@@ -57,6 +71,7 @@ export default function CameraTabs({
   const [insertIndex, setInsertIndex] = useState(null);
   const [indicatorLeft, setIndicatorLeft] = useState(0);
 
+  // Distinguish tab reorder (move) from sidebar/timeline drops (copy).
   const isTabDrag = Boolean(dragTabId);
   const showExternalDrop = dragging && !isTabDrag;
   const showInsertIndicator = insertIndex != null && (isTabDrag || dragging);
@@ -125,6 +140,7 @@ export default function CameraTabs({
     commitDrop(e, tabs.length);
   };
 
+  // Keep the active tab visible when selection or tab list changes.
   useEffect(() => {
     const bar = barRef.current;
     if (!bar || !activeTabId) return;

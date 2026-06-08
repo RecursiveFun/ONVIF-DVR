@@ -1,3 +1,7 @@
+/**
+ * Grip icon that starts HTML5 drag for camera tabs. Stops propagation so
+ * parent list items do not steal drag or click events.
+ */
 export default function DragHandle({ onDragStart, onDragEnd, label = 'Drag beside the page' }) {
   return (
     <span

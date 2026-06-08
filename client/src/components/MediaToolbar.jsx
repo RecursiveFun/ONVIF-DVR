@@ -1,3 +1,6 @@
+/**
+ * Mute toggle, volume slider, and percentage label for video players.
+ */
 import VolumeOffOutlinedIcon from '@mui/icons-material/VolumeOffOutlined';
 import VolumeUpOutlinedIcon from '@mui/icons-material/VolumeUpOutlined';
 import IconButton from '@mui/material/IconButton';

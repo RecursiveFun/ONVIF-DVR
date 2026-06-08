@@ -1,9 +1,17 @@
+/**
+ * FFmpeg discovery and child-process spawning.
+ *
+ * Locates an `ffmpeg` binary on PATH or common Windows install locations,
+ * caches the resolved path, and spawns processes with safe error handling.
+ */
 import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
 let cachedPath = null;
+
+// --- Binary discovery ---
 
 function existsExecutable(filePath) {
   try {
@@ -37,6 +45,10 @@ function wingetFfmpegCandidates() {
   return candidates;
 }
 
+/**
+ * Find a working `ffmpeg` executable and cache the result for the process lifetime.
+ * @returns {string | null}
+ */
 export function resolveFfmpegPath() {
   if (cachedPath) return cachedPath;
 
@@ -58,6 +70,7 @@ export function resolveFfmpegPath() {
   return null;
 }
 
+/** @returns {{ available: boolean, path: string | null }} */
 export function checkFfmpeg() {
   const ffmpegPath = resolveFfmpegPath();
   return {
@@ -66,8 +79,13 @@ export function checkFfmpeg() {
   };
 }
 
+// --- Process spawn ---
+
 /**
  * Spawn ffmpeg with immediate error handling so ENOENT does not crash the server.
+ * @param {string[]} args FFmpeg CLI arguments (excluding the binary path).
+ * @param {{ label: string, onClose?: (code: number | null) => void, onSpawnError?: (err: Error) => void }} handlers
+ * @returns {import('child_process').ChildProcess}
  */
 export function spawnFfmpeg(args, { label, onClose, onSpawnError }) {
   const ffmpegPath = resolveFfmpegPath();

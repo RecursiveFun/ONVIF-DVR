@@ -1,3 +1,6 @@
+/**
+ * Collapsible accordion block for grouped sidebar content (e.g. Cameras).
+ */
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import Accordion from '@mui/material/Accordion';
 import AccordionDetails from '@mui/material/AccordionDetails';

@@ -1,3 +1,9 @@
+/**
+ * Multiview page: grid of cameras the user selected in the sidebar.
+ *
+ * Each tile shows a live player when streaming, otherwise a status-aware placeholder.
+ * Tiles open the full camera page or can be removed from the multiview set.
+ */
 import CloseIcon from '@mui/icons-material/Close';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -12,10 +18,12 @@ import { api } from '../api.js';
 import LivePlayer from './LivePlayer.jsx';
 import { statusColor, statusLabel } from '../utils/cameraStatus.js';
 
+/** Single camera card in the multiview grid. */
 function MultiviewTile({ camera, onOpen, onRemove }) {
   const isLive = camera.status === 'live';
   const isRecording = camera.recording;
 
+  // Placeholder copy reflects recording-without-live vs idle states.
   let placeholder = 'Start live view from the camera page.';
   if (isRecording && !isLive) {
     placeholder = 'Recording without a live preview.';
@@ -81,6 +89,11 @@ function MultiviewTile({ camera, onOpen, onRemove }) {
   );
 }
 
+/**
+ * @param {object} props
+ * @param {Array} props.cameras - Full camera list (for empty-state messaging).
+ * @param {string[]} props.selectedIds - IDs shown in the grid; order follows sidebar selection.
+ */
 export default function MultiviewGrid({ cameras, selectedIds, onOpenCamera, onRemoveCamera }) {
   const selected = new Set(selectedIds);
   const visible = cameras.filter((camera) => selected.has(camera.id));

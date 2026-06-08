@@ -1,3 +1,9 @@
+/**
+ * Disk space monitoring for the recordings volume.
+ *
+ * Reports free/total bytes, classifies status for the UI, and blocks new
+ * recordings when free space drops below a critical threshold.
+ */
 import { statfsSync } from 'fs';
 import fs from 'fs';
 import path from 'path';
@@ -8,6 +14,9 @@ export const CRITICAL_FREE_BYTES = 1 * 1024 ** 3;
 /** Show a warning in the UI below this free space (5 GB). */
 export const WARN_FREE_BYTES = 5 * 1024 ** 3;
 
+// --- Formatting and classification ---
+
+/** Human-readable byte size for error messages and UI labels. */
 export function formatBytes(bytes) {
   if (!Number.isFinite(bytes) || bytes < 0) return '0 B';
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
@@ -16,12 +25,19 @@ export function formatBytes(bytes) {
   return `${Math.round(bytes)} B`;
 }
 
+/** Map free bytes to `ok`, `low`, or `critical` using configured thresholds. */
 export function classifyStorage(freeBytes) {
   if (freeBytes < CRITICAL_FREE_BYTES) return 'critical';
   if (freeBytes < WARN_FREE_BYTES) return 'low';
   return 'ok';
 }
 
+// --- Volume and recordings size ---
+
+/**
+ * Filesystem stats for the volume containing `targetPath`.
+ * @param {string} [targetPath] Path on the volume to query; callers should pass the recordings dir.
+ */
 export function getVolumeStats(targetPath = DATA_DIR) {
   const root = path.resolve(targetPath);
   if (!fs.existsSync(root)) {
@@ -40,6 +56,7 @@ export function getVolumeStats(targetPath = DATA_DIR) {
   };
 }
 
+/** Sum on-disk size of all files under the recordings tree. */
 export function getRecordingsBytes(root = getRecordingsDir()) {
   if (!fs.existsSync(root)) return 0;
 
@@ -71,6 +88,9 @@ export function getRecordingsBytes(root = getRecordingsDir()) {
   return total;
 }
 
+// --- API-facing status and record guard ---
+
+/** Combined volume and recordings usage for `/api/storage` and internal checks. */
 export function getStorageStatus() {
   const recordingsDir = getRecordingsDir();
   const volume = getVolumeStats(recordingsDir);
@@ -89,6 +109,7 @@ export function getStorageStatus() {
   };
 }
 
+/** Throw when free disk space is below the critical recording threshold. */
 export function assertCanRecord() {
   const { freeBytes, status } = getStorageStatus();
   if (status === 'critical') {

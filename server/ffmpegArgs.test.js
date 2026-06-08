@@ -4,6 +4,7 @@ import {
   DEFAULT_SEGMENT_SECONDS,
   liveOutputArgs,
   recordOutputArgs,
+  remuxTimestampArgs,
   rtspInputOptions,
 } from './ffmpegArgs.js';
 
@@ -33,7 +34,20 @@ describe('ffmpegArgs', () => {
     assert.deepEqual(args, [
       '-rtsp_transport', 'tcp',
       '-fflags', '+genpts',
+      '-start_at_zero',
+      '-flags', 'low_delay',
+      '-thread_queue_size', '512',
       '-use_wallclock_as_timestamps', '1',
     ]);
+  });
+
+  it('adds remux timestamp args for copy mode outputs', () => {
+    const args = remuxTimestampArgs();
+    assert.ok(args.includes('-copytb'));
+    assert.ok(args.includes('1'));
+    assert.ok(args.includes('-fps_mode'));
+    assert.ok(args.includes('passthrough'));
+    assert.ok(liveOutputArgs().includes('-copytb'));
+    assert.ok(recordOutputArgs().includes('-avoid_negative_ts'));
   });
 });

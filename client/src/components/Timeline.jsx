@@ -13,12 +13,21 @@ import ListItemText from '@mui/material/ListItemText';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatLocalTime } from '../api.js';
+import { useTimelineScrub } from '../hooks/useTimelineScrub.js';
 import DragHandle from './DragHandle.jsx';
 import { setSegmentDragData } from '../utils/dragPayload.js';
 import { DEFAULT_RETENTION_DAYS, formatRetentionLabel } from '../utils/retention.js';
 import { DEFAULT_SEGMENT_DURATION_SEC, formatSegmentDurationLabel } from '../utils/segmentDuration.js';
+import { segmentEndTime, segmentTime } from '../utils/segments.js';
+import {
+  clamp,
+  getVisibleTimeMs,
+  playbackScrubMarker,
+  segmentBarLayout,
+  timelineRange,
+} from '../utils/timeline.js';
 
 function todayKey() {
   return localDayKey(new Date().toISOString());
@@ -68,10 +77,6 @@ function formatSegmentTime(seg) {
   });
 }
 
-function segmentTime(seg) {
-  return new Date(seg.startLocal || seg.mtime).getTime();
-}
-
 function sortSegments(segments, sortOrder) {
   return [...segments].sort((a, b) => {
     const ta = segmentTime(a);
@@ -83,21 +88,6 @@ function sortSegments(segments, sortOrder) {
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 10;
 const ZOOM_STEP = 0.5;
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function getVisibleTimeMs(scrollLeft, viewportWidth, zoomLevel, startMs, span) {
-  const trackWidth = viewportWidth * zoomLevel;
-  if (!viewportWidth || trackWidth <= 0) {
-    return { startMs, endMs: startMs + span };
-  }
-  return {
-    startMs: startMs + (scrollLeft / trackWidth) * span,
-    endMs: startMs + ((scrollLeft + viewportWidth) / trackWidth) * span,
-  };
-}
 
 function groupSegmentsByDay(segments, sortOrder) {
   const byDay = new Map();
@@ -128,9 +118,19 @@ function groupSegmentsByDay(segments, sortOrder) {
     });
 }
 
+/**
+ * Recording timeline — day-grouped list plus a zoomable segment bar.
+ *
+ * Playback scrubbing (optional):
+ *   playbackScrub  — { segmentId, timeSec } from the parent; drives the red playhead.
+ *   onScrubChange  — called while dragging and on release; parent seeks the video player.
+ *   When both are set and a segment is selected, that segment and the playhead become draggable.
+ */
 export default function Timeline({
   segments,
   selectedId,
+  playbackScrub = null,
+  onScrubChange,
   onSelect,
   rangeStart,
   rangeEnd,
@@ -146,6 +146,7 @@ export default function Timeline({
   const [zoomLevel, setZoomLevel] = useState(MIN_ZOOM);
   const [viewportScroll, setViewportScroll] = useState({ scrollLeft: 0, width: 0 });
   const barViewportRef = useRef(null);
+  const barTrackRef = useRef(null);
 
   const syncViewportScroll = useCallback(() => {
     const viewport = barViewportRef.current;
@@ -250,11 +251,9 @@ export default function Timeline({
     const viewport = barViewportRef.current;
     if (!seg || !viewport) return;
 
-    const startMs = rangeStart ? new Date(rangeStart).getTime() : 0;
-    const endMs = rangeEnd ? new Date(rangeEnd).getTime() : startMs + 1;
-    const span = Math.max(endMs - startMs, 1);
-    const segStart = seg.startLocal ? new Date(seg.startLocal).getTime() : new Date(seg.mtime).getTime();
-    const segEnd = seg.endLocal ? new Date(seg.endLocal).getTime() : segStart + seg.durationSec * 1000;
+    const { startMs, span } = timelineRange(rangeStart, rangeEnd);
+    const segStart = segmentTime(seg);
+    const segEnd = segmentEndTime(seg);
     const leftFrac = (segStart - startMs) / span;
     const widthFrac = (segEnd - segStart) / span;
     const viewportWidth = viewport.clientWidth;
@@ -276,6 +275,66 @@ export default function Timeline({
     return () => observer.disconnect();
   }, [segments, syncViewportScroll]);
 
+  // --- Timeline scale (wall-clock ms for the full bar) ---
+
+  const { startMs: timelineStartMs, span: timelineSpan } = useMemo(
+    () => timelineRange(rangeStart, rangeEnd),
+    [rangeStart, rangeEnd],
+  );
+
+  const selectedSegment = useMemo(
+    () => (selectedId && segments?.length ? segments.find((s) => s.id === selectedId) : null),
+    [segments, selectedId],
+  );
+
+  // Scrubbing is only active during playback when the parent wires both position and a change handler.
+  const canScrubSegment = Boolean(onScrubChange && playbackScrub && selectedSegment);
+
+  const {
+    beginScrub,
+    moveScrub,
+    endScrub,
+    dragTimeSec,
+    isDragging,
+  } = useTimelineScrub({
+    enabled: canScrubSegment,
+    trackRef: barTrackRef,
+    segment: selectedSegment,
+    rangeStartMs: timelineStartMs,
+    rangeSpan: timelineSpan,
+    onScrubChange,
+  });
+
+  const dayGroups = useMemo(
+    () => (segments?.length ? groupSegmentsByDay(segments, sortOrder) : []),
+    [segments, sortOrder],
+  );
+  const allBytes = useMemo(() => totalBytes(segments || []), [segments]);
+  const segmentLayouts = useMemo(
+    () => (segments || []).map((seg) => ({
+      seg,
+      layout: segmentBarLayout(seg, timelineStartMs, timelineSpan),
+    })),
+    [segments, timelineStartMs, timelineSpan],
+  );
+  const { startMs: visibleStartMs, endMs: visibleEndMs } = useMemo(
+    () => getVisibleTimeMs(
+      viewportScroll.scrollLeft,
+      viewportScroll.width,
+      zoomLevel,
+      timelineStartMs,
+      timelineSpan,
+    ),
+    [viewportScroll.scrollLeft, viewportScroll.width, zoomLevel, timelineStartMs, timelineSpan],
+  );
+  // Red playhead: prefer live drag position, otherwise follow the video's reported time.
+  const scrubMarker = useMemo(() => {
+    if (!selectedSegment || !playbackScrub || playbackScrub.segmentId !== selectedId) return null;
+
+    const displayTimeSec = dragTimeSec ?? playbackScrub.timeSec ?? 0;
+    return playbackScrubMarker(selectedSegment, displayTimeSec, timelineStartMs, timelineSpan);
+  }, [selectedSegment, playbackScrub, selectedId, dragTimeSec, timelineStartMs, timelineSpan]);
+
   if (!segments?.length) {
     return (
       <div className="timeline empty">
@@ -296,24 +355,15 @@ export default function Timeline({
     onDragStart?.();
   };
 
-  const dayGroups = groupSegmentsByDay(segments, sortOrder);
-  const allBytes = totalBytes(segments);
-  const startMs = rangeStart ? new Date(rangeStart).getTime() : 0;
-  const endMs = rangeEnd ? new Date(rangeEnd).getTime() : startMs + 1;
-  const span = Math.max(endMs - startMs, 1);
-  const { startMs: visibleStartMs, endMs: visibleEndMs } = getVisibleTimeMs(
-    viewportScroll.scrollLeft,
-    viewportScroll.width,
-    zoomLevel,
-    startMs,
-    span,
-  );
-
   return (
     <div className="timeline">
       <div className="timeline-header">
         <span>{formatLocalTime(new Date(visibleStartMs).toISOString())}</span>
-        <span className="muted">
+        <span className="muted timeline-header-meta">
+          {scrubMarker ? (
+            <span className="timeline-scrub-header">Playing at {scrubMarker.label}</span>
+          ) : null}
+          {scrubMarker ? ' · ' : ''}
           {dayGroups.length} day{dayGroups.length !== 1 ? 's' : ''} · {segments.length} segment{segments.length !== 1 ? 's' : ''} · {formatStorage(allBytes)}
         </span>
         <span>{formatLocalTime(new Date(visibleEndMs).toISOString())}</span>
@@ -365,27 +415,39 @@ export default function Timeline({
         aria-label="Recording timeline segments"
         title={zoomLevel > MIN_ZOOM ? 'Wheel to zoom. Shift+wheel, horizontal scroll, or arrow keys to pan.' : 'Wheel to zoom in'}
       >
+        {/* Move/up handlers live on the track so pointer capture keeps receiving events. */}
         <div
-          className="timeline-bar-track"
+          ref={barTrackRef}
+          className={`timeline-bar-track${canScrubSegment ? ' scrub-enabled' : ''}`}
           style={{ width: `${zoomLevel * 100}%` }}
+          onPointerMove={moveScrub}
+          onPointerUp={endScrub}
+          onPointerCancel={endScrub}
         >
-          {segments.map((seg) => {
-            const segStart = seg.startLocal ? new Date(seg.startLocal).getTime() : new Date(seg.mtime).getTime();
-            const segEnd = seg.endLocal ? new Date(seg.endLocal).getTime() : segStart + seg.durationSec * 1000;
-            const left = ((segStart - startMs) / span) * 100;
-            const width = Math.max(((segEnd - segStart) / span) * 100, 0.5);
+          {segmentLayouts.map(({ seg, layout }) => {
             const selected = seg.id === selectedId;
+            // Only the playing segment scrubs; others stay draggable to open a new tab.
+            const scrubbable = selected && canScrubSegment;
 
             return (
               <div
                 key={seg.id}
                 role="button"
                 tabIndex={0}
-                className={`timeline-segment draggable-item${selected ? ' selected' : ''}`}
-                draggable
-                style={{ left: `${left}%`, width: `${width}%` }}
-                title={`${seg.startLocalDisplay} — drag to open a new tab`}
-                onClick={() => onSelect(seg)}
+                className={`timeline-segment draggable-item${selected ? ' selected' : ''}${scrubbable ? ' scrubbable' : ''}`}
+                draggable={!scrubbable}
+                style={{ left: `${layout.left}%`, width: `${layout.width}%` }}
+                title={
+                  scrubbable
+                    ? `${seg.startLocalDisplay} — click or drag to scrub`
+                    : `${seg.startLocalDisplay} — drag to open a new tab`
+                }
+                onClick={() => {
+                  // A scrub ends with pointer-up; suppress the click that would follow.
+                  if (isDragging()) return;
+                  if (!scrubbable) onSelect(seg);
+                }}
+                onPointerDown={scrubbable ? beginScrub : undefined}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
@@ -397,6 +459,18 @@ export default function Timeline({
               />
             );
           })}
+          {scrubMarker && (
+            <div
+              className="timeline-scrub-marker"
+              style={{ left: `${scrubMarker.leftPercent}%` }}
+              aria-label={`Playback position at ${scrubMarker.label}`}
+              onPointerDown={canScrubSegment ? beginScrub : undefined}
+              title="Drag to scrub playback"
+            >
+              <span className="timeline-scrub-label">{scrubMarker.label}</span>
+              <span className="timeline-scrub-line" aria-hidden="true" />
+            </div>
+          )}
         </div>
       </div>
 

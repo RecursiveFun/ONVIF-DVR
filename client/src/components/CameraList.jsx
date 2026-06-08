@@ -1,3 +1,7 @@
+/**
+ * Sidebar camera list with preview thumbnails, status chips, and drag-to-tab.
+ * Selection semantics differ between single-tab and multiview modes.
+ */
 import Chip from '@mui/material/Chip';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
@@ -31,6 +35,7 @@ export default function CameraList({
       ) : (
         <List dense disablePadding className="camera-pages-nav">
           {cameras.map((cam) => {
+            // Multiview highlights every selected tile; tabs highlight the active page only.
             const inMultiview = multiviewMode && selectedIds?.includes(cam.id);
             const isActive = multiviewMode ? inMultiview : cam.id === activeId;
 

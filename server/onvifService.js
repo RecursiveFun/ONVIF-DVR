@@ -1,3 +1,9 @@
+/**
+ * ONVIF device discovery and connection.
+ *
+ * WS-Discovery UDP probes, direct host probes, and authenticated connections
+ * to retrieve RTSP stream URIs from network cameras.
+ */
 import dgram from 'dgram';
 import os from 'os';
 import onvif from 'onvif';
@@ -5,6 +11,8 @@ import { parseSOAPString, linerase } from './onvifSoap.js';
 
 const MULTICAST = '239.255.255.250';
 const WS_DISCOVERY_PORT = 3702;
+
+// --- WS-Discovery message helpers ---
 
 function guid() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -31,6 +39,8 @@ function buildProbeMessage(messageId = guid()) {
       '</Envelope>'
   );
 }
+
+// --- Device parsing and normalization ---
 
 function isIPv4(family) {
   return family === 'IPv4' || family === 4;
@@ -63,6 +73,10 @@ function isAuthError(err) {
     || msg.includes('401') || msg.includes('unauthorized');
 }
 
+/**
+ * List non-internal IPv4 interfaces usable for ONVIF discovery.
+ * @returns {{ name: string, address: string, netmask: string }[]}
+ */
 export function listNetworkInterfaces() {
   const nets = os.networkInterfaces();
   const result = [];
@@ -95,6 +109,8 @@ function normalizeDevice(data, rinfo) {
     xaddrs,
   };
 }
+
+// --- UDP probe (multicast or unicast) ---
 
 function probeTarget({ bindAddress, targetHost, timeoutMs = 8000 }) {
   return new Promise((resolve) => {
@@ -137,6 +153,12 @@ function probeTarget({ bindAddress, targetHost, timeoutMs = 8000 }) {
   });
 }
 
+/**
+ * Run WS-Discovery on all local interfaces and merge unique devices.
+ * Falls back to the legacy `onvif` library probe when nothing responds.
+ * @param {number} [timeoutMs=10000] Per-probe timeout in milliseconds.
+ * @returns {Promise<{ devices: object[], interfaces: string[], hints: string[] }>}
+ */
 export async function discoverDevices(timeoutMs = 10000) {
   const interfaces = listNetworkInterfaces();
   const seen = new Map();
@@ -195,6 +217,12 @@ function legacyProbe(timeoutMs) {
   });
 }
 
+/**
+ * Send WS-Discovery probes directly to a single host (by IP or hostname).
+ * @param {string} hostname Target address.
+ * @param {number} [timeoutMs=5000]
+ * @returns {Promise<object[]>} Discovered device descriptors.
+ */
 export async function probeHost(hostname, timeoutMs = 5000) {
   const interfaces = listNetworkInterfaces();
   const seen = new Map();
@@ -210,6 +238,8 @@ export async function probeHost(hostname, timeoutMs = 5000) {
   }
   return [...seen.values()];
 }
+
+// --- ONVIF connection and stream URI ---
 
 function connectCam(options) {
   return new Promise((resolve, reject) => {
@@ -257,7 +287,10 @@ function connectionAttempts({ hostname, port, username, password, path, secure }
 }
 
 /**
- * Connect to an ONVIF device and return RTSP stream URI.
+ * Connect to an ONVIF device and return an RTSP stream URI with credentials embedded.
+ * Tries multiple service paths and WS-Security / HTTP-digest auth combinations.
+ * @param {{ hostname: string, port?: number, username?: string, password?: string, path?: string, secure?: boolean }} params
+ * @returns {Promise<{ rtspUrl: string, deviceInfo: object, authMethod: string, onvifPath: string }>}
  */
 export async function getStreamUri({ hostname, port = 80, username, password, path, secure }) {
   if (!username?.trim() || !password) {
@@ -291,6 +324,11 @@ export async function getStreamUri({ hostname, port = 80, username, password, pa
   throw lastError;
 }
 
+/**
+ * Probe a host, then connect using the first discovered device profile.
+ * @param {{ hostname: string, port?: number, username?: string, password?: string }} params
+ * @returns {Promise<{ rtspUrl: string, deviceInfo: object, authMethod: string, onvifPath: string }>}
+ */
 export async function connectByHost({ hostname, port, username, password }) {
   const probed = await probeHost(hostname);
   const device = probed[0];

@@ -1,3 +1,8 @@
+/**
+ * DVR retention settings — how long finished segments are kept before auto-delete.
+ * 0 means manual cleanup only.
+ */
+
 export const DEFAULT_RETENTION_DAYS = 7;
 export const MIN_RETENTION_DAYS = 0;
 export const MAX_RETENTION_DAYS = 365;

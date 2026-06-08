@@ -1,9 +1,17 @@
+/**
+ * HLS live preview for an active camera tab or multiview tile.
+ * Polls until the server playlist exists, then attaches hls.js (or native HLS on Safari).
+ */
 import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import MediaToolbar from './MediaToolbar.jsx';
 import FullscreenButton from './FullscreenButton.jsx';
 import { useMediaControls } from '../hooks/useMediaControls.js';
 
+/**
+ * Poll the m3u8 URL until FFmpeg has written the first playlist.
+ * FFmpeg may lag behind the UI opening a camera, so we retry instead of failing immediately.
+ */
 async function waitForPlaylist(src, maxAttempts = 30, intervalMs = 1000) {
   for (let i = 0; i < maxAttempts; i += 1) {
     try {
@@ -32,6 +40,7 @@ export default function LivePlayer({ src, active, compact = false }) {
     toggleFullscreen,
   } = useMediaControls(videoRef);
 
+  // HLS attach / teardown when src or visibility changes.
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src || !active) return undefined;
@@ -68,6 +77,7 @@ export default function LivePlayer({ src, active, compact = false }) {
         });
         hls.on(Hls.Events.ERROR, (_e, data) => {
           if (!data.fatal) return;
+          // Recover transient network drops; other fatal errors tear down the instance.
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
             setStatus(hasPlayedRef.current ? 'reconnecting' : 'connecting');
             hls.startLoad();
@@ -79,6 +89,7 @@ export default function LivePlayer({ src, active, compact = false }) {
         return undefined;
       }
 
+      // Safari / iOS: native HLS via video.src.
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = src;
         video.play().catch(() => {});
@@ -97,6 +108,7 @@ export default function LivePlayer({ src, active, compact = false }) {
     };
   }, [src, active]);
 
+  // Pause hidden tiles and reset reconnect state when a tab goes inactive.
   useEffect(() => {
     if (!active) {
       hasPlayedRef.current = false;

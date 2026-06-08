@@ -1,3 +1,10 @@
+/**
+ * "Go Live" from a segment tab — switch back to the camera's live view.
+ *
+ * If a live camera tab already exists, focus it. Otherwise convert the segment
+ * tab in place so the user does not accumulate duplicate tabs.
+ */
+
 import { labelCameraTab } from './tabLabels.js';
 
 export function resolveGoLiveFromSegment(tabs, tabId, cameras) {
@@ -13,17 +20,17 @@ export function resolveGoLiveFromSegment(tabs, tabId, cameras) {
     return { tabs, activeTabId: existingCameraTab.id };
   }
 
-  const cam = cameras.find((c) => c.id === segmentTab.cameraId);
+  const camera = cameras.find((c) => c.id === segmentTab.cameraId);
   const nextTabs = tabs.map((tab) => {
     if (tab.id !== tabId) return tab;
-    if (!cam) {
+    if (!camera) {
       return { ...tab, type: 'camera', segment: undefined };
     }
     return {
       ...tab,
       type: 'camera',
       segment: undefined,
-      label: labelCameraTab(cam, tabs, tabId),
+      label: labelCameraTab(camera, tabs, tabId),
     };
   });
 

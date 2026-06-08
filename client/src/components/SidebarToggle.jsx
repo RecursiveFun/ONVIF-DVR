@@ -1,3 +1,6 @@
+/**
+ * Header button that shows or hides the cameras sidebar.
+ */
 import MenuIcon from '@mui/icons-material/Menu';
 import IconButton from '@mui/material/IconButton';
 

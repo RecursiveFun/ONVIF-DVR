@@ -1,3 +1,6 @@
+/**
+ * Tabs vs multiview layout switcher in the app header.
+ */
 import TabOutlinedIcon from '@mui/icons-material/TabOutlined';
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
 import ToggleButton from '@mui/material/ToggleButton';
@@ -12,6 +15,7 @@ export default function ViewModeToggle({ viewMode, onChange }) {
       size="small"
       value={viewMode}
       onChange={(_event, value) => {
+        // Exclusive group passes null when the active button is clicked again.
         if (value) onChange(value);
       }}
       aria-label="Main view mode"

@@ -1,3 +1,6 @@
+/**
+ * Wraps the app in a memoized MUI theme derived from light/dark mode.
+ */
 import { useMemo } from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import { createAppTheme } from '../theme/muiTheme.js';

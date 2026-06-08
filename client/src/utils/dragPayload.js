@@ -1,29 +1,35 @@
+/**
+ * HTML5 drag-and-drop payloads for opening cameras, segments, or reordering tabs.
+ * Uses a custom MIME type so we can distinguish our drags from plain text.
+ */
+
 export const DRAG_MIME = 'application/x-onvif-dvr';
 
-function writePayload(e, payload) {
+function writePayload(event, payload) {
   const json = JSON.stringify(payload);
-  e.dataTransfer.setData(DRAG_MIME, json);
-  e.dataTransfer.setData('text/plain', json);
-  e.dataTransfer.effectAllowed = 'copy';
+  event.dataTransfer.setData(DRAG_MIME, json);
+  event.dataTransfer.setData('text/plain', json);
+  event.dataTransfer.effectAllowed = 'copy';
 }
 
-export function setCameraDragData(e, cameraId) {
-  writePayload(e, { type: 'camera', cameraId });
+export function setCameraDragData(event, cameraId) {
+  writePayload(event, { type: 'camera', cameraId });
 }
 
-export function setSegmentDragData(e, { segment, cameraId, cameraName }) {
-  writePayload(e, { type: 'segment', segment, cameraId, cameraName });
+export function setSegmentDragData(event, { segment, cameraId, cameraName }) {
+  writePayload(event, { type: 'segment', segment, cameraId, cameraName });
 }
 
-export function setTabDragData(e, tabId) {
+/** Tab reorder uses copyMove so the source tab can be removed after a successful drop. */
+export function setTabDragData(event, tabId) {
   const json = JSON.stringify({ type: 'tab', tabId });
-  e.dataTransfer.setData(DRAG_MIME, json);
-  e.dataTransfer.setData('text/plain', json);
-  e.dataTransfer.effectAllowed = 'copyMove';
+  event.dataTransfer.setData(DRAG_MIME, json);
+  event.dataTransfer.setData('text/plain', json);
+  event.dataTransfer.effectAllowed = 'copyMove';
 }
 
-export function parseDragPayload(e) {
-  const raw = e.dataTransfer.getData(DRAG_MIME) || e.dataTransfer.getData('text/plain');
+export function parseDragPayload(event) {
+  const raw = event.dataTransfer.getData(DRAG_MIME) || event.dataTransfer.getData('text/plain');
   if (!raw) return null;
   try {
     const payload = JSON.parse(raw);
@@ -36,7 +42,7 @@ export function parseDragPayload(e) {
   }
 }
 
-export function isDragPayload(e) {
-  const types = Array.from(e.dataTransfer?.types || []);
+export function isDragPayload(event) {
+  const types = Array.from(event.dataTransfer?.types || []);
   return types.includes(DRAG_MIME) || types.includes('text/plain');
 }

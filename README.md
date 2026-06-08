@@ -437,7 +437,30 @@ npm run build            # production client build
 npm test                 # all tests (server + client)
 npm run test:server      # Node test runner
 npm run test:client      # Vitest
+npm run setup:hooks      # block local git push when tests fail (once per clone)
 ```
+
+### CI and blocking pushes
+
+**GitHub Actions** (`.github/workflows/ci.yml`) runs `npm test` on every push and pull request.
+
+To **block merges to `main`** when tests fail:
+
+1. Push this workflow to GitHub (it must run at least once so the check appears).
+2. On the repo: **Settings → Branches → Add branch protection rule** for `main`.
+3. Enable **Require status checks to pass before merging**.
+4. Select the **`test`** check (from the CI workflow).
+5. Save the rule.
+
+Direct pushes to `main` are then rejected on GitHub until CI is green. For pull requests, the merge button stays disabled until tests pass.
+
+**Local pre-push hook** (optional, blocks `git push` on your machine before anything reaches GitHub):
+
+```bash
+npm run setup:hooks
+```
+
+That points Git at `.githooks/pre-push`, which runs `npm test` before each push. Re-run `setup:hooks` after cloning on a new machine.
 
 ### Client structure
 

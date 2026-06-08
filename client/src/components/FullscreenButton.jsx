@@ -1,3 +1,6 @@
+/**
+ * Corner fullscreen toggle for the live player chrome.
+ */
 import FullscreenExitOutlinedIcon from '@mui/icons-material/FullscreenExitOutlined';
 import FullscreenOutlinedIcon from '@mui/icons-material/FullscreenOutlined';
 import IconButton from '@mui/material/IconButton';

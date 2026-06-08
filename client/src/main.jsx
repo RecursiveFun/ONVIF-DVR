@@ -1,3 +1,4 @@
+/** React entry point — mounts the app inside an error boundary. */
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';

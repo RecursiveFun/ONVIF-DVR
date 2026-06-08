@@ -1,3 +1,9 @@
+/**
+ * Persistent DVR settings (segment duration, recordings path, retention).
+ *
+ * Loads and caches `data/settings.json` with validated defaults and clamps
+ * user updates to safe ranges.
+ */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -25,18 +31,23 @@ const defaults = {
 /** @type {{ segmentDurationSec: number, recordingsDir: string, retentionDays: number }} */
 let cached = { ...defaults };
 
+// --- Validation and path resolution ---
+
+/** Clamp retention days to [MIN_RETENTION_DAYS, MAX_RETENTION_DAYS]. */
 export function clampRetentionDays(value) {
   const rounded = Math.round(Number(value));
   if (!Number.isFinite(rounded)) return DEFAULT_RETENTION_DAYS;
   return Math.min(MAX_RETENTION_DAYS, Math.max(MIN_RETENTION_DAYS, rounded));
 }
 
+/** Clamp segment duration to [MIN_SEGMENT_SECONDS, MAX_SEGMENT_SECONDS]. */
 export function clampSegmentSeconds(value) {
   const rounded = Math.round(Number(value));
   if (!Number.isFinite(rounded)) return DEFAULT_SEGMENT_SECONDS;
   return Math.min(MAX_SEGMENT_SECONDS, Math.max(MIN_SEGMENT_SECONDS, rounded));
 }
 
+/** Resolve a recordings directory path (absolute or relative to project root). */
 export function resolveRecordingsDir(input) {
   const trimmed = typeof input === 'string' ? input.trim() : '';
   if (!trimmed) return DEFAULT_RECORDINGS_DIR;
@@ -44,6 +55,7 @@ export function resolveRecordingsDir(input) {
   return path.resolve(PROJECT_ROOT, trimmed);
 }
 
+/** Resolve, confine under browse roots, and verify the folder is writable. */
 export function validateRecordingsDir(input) {
   const resolved = resolveRecordingsDir(input);
   assertUnderBrowseRoots(resolved);
@@ -79,6 +91,8 @@ function normalizeSettings(input, { validateRecordings = false } = {}) {
   };
 }
 
+// --- Load, save, and public getters ---
+
 function loadSettings() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(SETTINGS_FILE)) return { ...defaults };
@@ -95,28 +109,37 @@ function saveSettings() {
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(cached, null, 2));
 }
 
+/** @returns {{ segmentDurationSec: number, recordingsDir: string, retentionDays: number }} */
 export function getSettings() {
   return { ...cached };
 }
 
+/** Current FFmpeg segment duration in seconds. */
 export function getSegmentSeconds() {
   return cached.segmentDurationSec;
 }
 
+/** Absolute path where camera recordings are stored. */
 export function getRecordingsDir() {
   return cached.recordingsDir;
 }
 
+/** Retention period in days; `0` disables automatic purge. */
 export function getRetentionDays() {
   return cached.retentionDays;
 }
 
+/** Create the recordings directory if missing. */
 export function ensureRecordingsDir() {
   const dir = getRecordingsDir();
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
 
+/**
+ * Merge partial settings, validate, persist to disk, and return the new snapshot.
+ * @param {Partial<{ segmentDurationSec: number, recordingsDir: string, retentionDays: number }>} partial
+ */
 export function updateSettings(partial) {
   const next = { ...cached };
 

@@ -1,5 +1,12 @@
+/**
+ * MUI theme factory for light/dark mode.
+ *
+ * Shared component overrides keep sidebar accordions flat and buttons sentence-case.
+ * Palettes mirror the app's CSS custom properties for a consistent DVR chrome.
+ */
 import { createTheme } from '@mui/material/styles';
 
+/** Component overrides and typography applied to both modes. */
 const shared = {
   shape: {
     borderRadius: 8,
@@ -62,6 +69,7 @@ const shared = {
   },
 };
 
+/** Mode-specific color tokens. */
 const palettes = {
   dark: {
     mode: 'dark',
@@ -111,6 +119,7 @@ const palettes = {
   },
 };
 
+/** @param {'light'|'dark'} [mode] */
 export function createAppTheme(mode = 'dark') {
   const palette = palettes[mode === 'light' ? 'light' : 'dark'];
   return createTheme({

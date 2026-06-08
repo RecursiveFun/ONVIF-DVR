@@ -1,3 +1,6 @@
+/* Global reset, theme tokens, and base typography.
+   Component-specific layout lives in App.css. */
+
 *,
 
 *::before,

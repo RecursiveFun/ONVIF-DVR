@@ -1,3 +1,8 @@
+/**
+ * Segment roll length — how often FFmpeg starts a new recording file.
+ * Configurable from 1 minute to 1 hour; default is 5 minutes.
+ */
+
 export const SEGMENT_DURATION_MIN_SEC = 60;
 export const SEGMENT_DURATION_MAX_SEC = 3600;
 export const DEFAULT_SEGMENT_DURATION_SEC = 300;

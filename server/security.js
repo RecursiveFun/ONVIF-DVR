@@ -1,15 +1,33 @@
+/**
+ * Security helpers for the ONVIF-DVR API.
+ *
+ * Path confinement, URL/hostname validation, response sanitization, HTTP
+ * hardening headers, rate limiting, and byte-range parsing for recording playback.
+ */
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { DATA_DIR, DEFAULT_RECORDINGS_DIR } from './settings.js';
 
 const PROJECT_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+/**
+ * Cloud metadata and link-local endpoints that must never be probed via ONVIF.
+ * Blocks SSRF-style requests to instance metadata services.
+ */
 const BLOCKED_ONVIF_HOSTS = new Set([
-  '169.254.169.254',
+  '169.254.169.254', // AWS / Azure / GCP link-local metadata
   'metadata.google.internal',
   'metadata.goog',
 ]);
 
+// --- Path confinement ---
+
+/**
+ * Resolve `targetPath` relative to `rootDir` and reject traversal outside the root.
+ * @param {string} rootDir Base directory recordings must stay under.
+ * @param {string} targetPath Relative path or filename within that root.
+ * @returns {string} Absolute resolved path inside `rootDir`.
+ */
 export function assertPathInsideRoot(rootDir, targetPath) {
   const root = path.resolve(rootDir);
   const resolved = path.resolve(root, targetPath);
@@ -20,6 +38,10 @@ export function assertPathInsideRoot(rootDir, targetPath) {
   return resolved;
 }
 
+/**
+ * Directories the filesystem browser may list (project root, data, recordings, home).
+ * @returns {string[]} Absolute paths allowed as browse roots.
+ */
 export function getBrowseAllowRoots() {
   const roots = [
     path.resolve(PROJECT_ROOT),
@@ -31,6 +53,11 @@ export function getBrowseAllowRoots() {
   return roots;
 }
 
+/**
+ * Ensure a resolved path is contained within at least one browse allow root.
+ * @param {string} resolvedPath Absolute path to validate.
+ * @returns {string} The same normalized path when allowed.
+ */
 export function assertUnderBrowseRoots(resolvedPath) {
   const normalized = path.resolve(resolvedPath);
   const allowed = getBrowseAllowRoots().some((root) => {
@@ -43,6 +70,13 @@ export function assertUnderBrowseRoots(resolvedPath) {
   return normalized;
 }
 
+// --- URL and hostname validation ---
+
+/**
+ * Validate an RTSP or RTSPS stream URL from user input.
+ * @param {string} rtspUrl
+ * @returns {string} Trimmed URL when valid.
+ */
 export function validateRtspUrl(rtspUrl) {
   if (typeof rtspUrl !== 'string' || !rtspUrl.trim()) {
     throw new Error('rtspUrl is required');
@@ -66,6 +100,12 @@ export function validateRtspUrl(rtspUrl) {
   return trimmed;
 }
 
+/**
+ * Validate a hostname for ONVIF probe/connect requests.
+ * Rejects blocked metadata hosts and malformed values.
+ * @param {string} hostname
+ * @returns {string} Trimmed hostname when allowed.
+ */
 export function validateOnvifHostname(hostname) {
   if (typeof hostname !== 'string' || !hostname.trim()) {
     throw new Error('hostname is required');
@@ -81,22 +121,44 @@ export function validateOnvifHostname(hostname) {
   return trimmed;
 }
 
+// --- Response sanitization ---
+
+/**
+ * Redact credentials embedded in an RTSP URL before sending to the client.
+ * @param {string} rtspUrl
+ * @returns {string}
+ */
 export function maskRtspUrl(rtspUrl) {
   if (!rtspUrl || typeof rtspUrl !== 'string') return rtspUrl;
   return rtspUrl.replace(/^(rtsps?:\/\/)(?:[^@/]+)@/i, '$1****:****@');
 }
 
+/**
+ * Return a camera object safe for API responses (masked RTSP credentials).
+ * @param {object | null | undefined} camera
+ * @returns {object | null | undefined}
+ */
 export function sanitizeCamera(camera) {
   if (!camera) return camera;
   return { ...camera, rtspUrl: maskRtspUrl(camera.rtspUrl) };
 }
 
+/**
+ * Strip the on-disk `path` field from a recording before API export.
+ * @param {object | null | undefined} recording
+ * @returns {object | null | undefined}
+ */
 export function sanitizeRecording(recording) {
   if (!recording) return recording;
   const { path: _path, ...rest } = recording;
   return rest;
 }
 
+// --- HTTP middleware ---
+
+/**
+ * Express middleware that sets baseline security response headers.
+ */
 export function securityHeaders(_req, res, next) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -105,6 +167,11 @@ export function securityHeaders(_req, res, next) {
   next();
 }
 
+/**
+ * Create a per-IP sliding-window rate limiter middleware.
+ * @param {{ windowMs?: number, max?: number }} [options]
+ * @returns {import('express').RequestHandler}
+ */
 export function createRateLimiter({ windowMs = 60_000, max = 300 } = {}) {
   const hits = new Map();
 
@@ -125,10 +192,23 @@ export function createRateLimiter({ windowMs = 60_000, max = 300 } = {}) {
   };
 }
 
+/**
+ * Stricter rate limiter preset for sensitive endpoints (ONVIF, camera create).
+ * @param {{ windowMs?: number, max?: number }} [options]
+ * @returns {import('express').RequestHandler}
+ */
 export function createStrictRateLimiter(options) {
   return createRateLimiter(options);
 }
 
+// --- Byte-range parsing ---
+
+/**
+ * Parse an HTTP `Range: bytes=` header for MP4 recording playback.
+ * @param {string | undefined} rangeHeader Raw Range header value.
+ * @param {number} size File size in bytes.
+ * @returns {{ start: number, end: number } | null} Inclusive byte range, or null if invalid.
+ */
 export function parseByteRange(rangeHeader, size) {
   if (!rangeHeader || typeof rangeHeader !== 'string') return null;
   const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());

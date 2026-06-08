@@ -1,3 +1,8 @@
+/**
+ * Main layout mode: tabbed camera pages vs multiview grid.
+ * Persisted in localStorage so the choice survives refresh.
+ */
+
 export const VIEW_MODE_TABS = 'tabs';
 export const VIEW_MODE_MULTIVIEW = 'multiview';
 export const DEFAULT_VIEW_MODE = VIEW_MODE_TABS;

@@ -1,4 +1,4 @@
-import { renderWithTheme as render, screen } from '../test/renderWithTheme.jsx';
+import { act, renderWithTheme as render, screen } from '../test/renderWithTheme.jsx';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import Timeline from './Timeline.jsx';
@@ -114,5 +114,83 @@ describe('Timeline', () => {
     renderTimeline();
 
     expect(screen.getByLabelText(/zoom out timeline/i)).toBeDisabled();
+  });
+
+  it('shows a scrub marker for the selected segment playback time', () => {
+    renderTimeline({
+      selectedId: segments[0].id,
+      playbackScrub: { segmentId: segments[0].id, timeSec: 90 },
+    });
+
+    expect(screen.getByText(/playing at/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/playback position at/i)).toBeInTheDocument();
+    expect(document.querySelector('.timeline-scrub-marker')).toBeTruthy();
+  });
+
+  it('calls onScrubChange when dragging the selected segment', () => {
+    const onScrubChange = vi.fn();
+    renderTimeline({
+      selectedId: segments[0].id,
+      playbackScrub: { segmentId: segments[0].id, timeSec: 0 },
+      onScrubChange,
+    });
+
+    const segment = document.querySelector('.timeline-segment.selected');
+    expect(segment).toBeTruthy();
+
+    segment.getBoundingClientRect = () => ({
+      x: 100,
+      y: 10,
+      left: 100,
+      top: 10,
+      right: 300,
+      bottom: 70,
+      width: 200,
+      height: 60,
+      toJSON: () => ({}),
+    });
+
+    const track = document.querySelector('.timeline-bar-track');
+    track.getBoundingClientRect = () => ({
+      x: 0,
+      y: 10,
+      left: 0,
+      top: 10,
+      right: 400,
+      bottom: 70,
+      width: 400,
+      height: 60,
+      toJSON: () => ({}),
+    });
+    Object.defineProperty(track, 'offsetWidth', { value: 400, configurable: true });
+    track.setPointerCapture = vi.fn();
+    track.releasePointerCapture = vi.fn();
+
+    act(() => {
+      segment.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 150,
+        pointerId: 1,
+      }));
+      track.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 200,
+        pointerId: 1,
+      }));
+      track.dispatchEvent(new PointerEvent('pointerup', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 200,
+        pointerId: 1,
+      }));
+    });
+
+    expect(onScrubChange).toHaveBeenCalled();
+    const lastCall = onScrubChange.mock.calls[onScrubChange.mock.calls.length - 1];
+    expect(lastCall[0]).toBe(segments[0].id);
+    expect(lastCall[2]).toEqual({ final: true });
+    expect(lastCall[1]).toBeCloseTo(150, 0);
   });
 });

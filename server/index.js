@@ -1,3 +1,10 @@
+/**
+ * ONVIF-DVR server bootstrap.
+ *
+ * Creates the Express app, starts the HTTP listener, runs periodic retention and
+ * disk-space guards, restores camera sessions after FFmpeg is confirmed, and
+ * handles graceful shutdown on SIGINT/SIGTERM.
+ */
 import { checkFfmpeg } from './ffmpegUtil.js';
 import { listLanUrls } from './networkUrls.js';
 import { purgeExpiredRecordings } from './recordings.js';
@@ -23,6 +30,8 @@ const SHUTDOWN_TIMEOUT_MS = 5_000;
 let shuttingDown = false;
 /** @type {import('http').Server | null} */
 let server = null;
+
+// --- Background timers: retention and disk guard ---
 
 function runRetentionCleanup() {
   try {
@@ -52,6 +61,8 @@ function runStorageGuard() {
 
 runStorageGuard();
 const storageTimer = setInterval(runStorageGuard, STORAGE_CHECK_INTERVAL_MS);
+
+// --- Shutdown ---
 
 function stopStreams() {
   for (const cam of listCameras()) {
@@ -87,6 +98,8 @@ function shutdown(signal) {
   }, SHUTDOWN_TIMEOUT_MS).unref();
 }
 
+// --- Listen and startup ---
+
 function onListen() {
   console.log(`ONVIF-DVR server listening on http://${HOST}:${PORT}`);
   if (process.env.SERVE_CLIENT === 'true') {
@@ -112,6 +125,8 @@ function onListen() {
     console.warn('[sessions] FFmpeg unavailable — skipped session restore');
   }
 }
+
+// --- Listen retry (EADDRINUSE) ---
 
 function startServer(attempt = 0) {
   if (shuttingDown) return;

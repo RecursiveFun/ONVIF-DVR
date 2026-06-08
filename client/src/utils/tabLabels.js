@@ -1,4 +1,12 @@
+/**
+ * Tab naming and factory helpers.
+ *
+ * Multiple tabs for the same camera get numbered suffixes: "Front Door (2)".
+ * Segment tabs append the recording time: "Front Door · Jun 8, 2:30 PM".
+ */
+
 function createRandomId() {
+  // crypto.randomUUID requires a secure context (HTTPS); fall back for LAN HTTP.
   if (typeof globalThis.crypto?.randomUUID === 'function') {
     return globalThis.crypto.randomUUID();
   }
@@ -17,6 +25,7 @@ function getNameSlot(label) {
   return { base: namePart, slot: 1 };
 }
 
+/** Pick a unique display name among open tabs for this camera. */
 export function labelCameraTab(camera, tabs, excludeTabId) {
   const base = camera.name;
   const others = tabs.filter((tab) => tab.id !== excludeTabId);

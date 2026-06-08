@@ -41,6 +41,10 @@ export default function CameraPageView({
   const [segmentRemoveTarget, setSegmentRemoveTarget] = useState(null);
   const [deletingSegment, setDeletingSegment] = useState(false);
   const [mediaRevision, setMediaRevision] = useState(0);
+
+  // Playback position shown on the timeline playhead (seconds into the active segment).
+  const [playbackScrubSec, setPlaybackScrubSec] = useState(0);
+  const playerRef = useRef(null);
   const wasRecordingRef = useRef(camera.recording);
 
   const isLive = camera.status === 'live';
@@ -86,6 +90,16 @@ export default function CameraPageView({
   useEffect(() => {
     setMediaRevision(0);
   }, [selectedSegment?.id]);
+
+  // Restore saved position when the user switches segments or the file is rewritten mid-playback.
+  useEffect(() => {
+    const segmentId = selectedSegment?.id ?? (isSegmentTab ? initialSegment?.id : null);
+    if (!segmentId) {
+      setPlaybackScrubSec(0);
+      return;
+    }
+    setPlaybackScrubSec(getPlaybackPosition?.(segmentId) ?? 0);
+  }, [selectedSegment?.id, initialSegment?.id, isSegmentTab, getPlaybackPosition, mediaRevision]);
 
   useEffect(() => {
     const wasRecording = wasRecordingRef.current;
@@ -205,6 +219,30 @@ export default function CameraPageView({
     ? getPlaybackPosition?.(activeSegment.id) ?? 0
     : 0;
 
+  /** Video timeupdate → timeline playhead (normal playback, not timeline drag). */
+  const handlePlaybackTimeChange = useCallback((segmentId, time) => {
+    if (segmentId === activeSegment?.id) {
+      setPlaybackScrubSec(time);
+    }
+    onPlaybackPositionChange?.(segmentId, time);
+  }, [activeSegment?.id, onPlaybackPositionChange]);
+
+  /**
+   * Timeline drag → video seek.
+   * Seeks on every move; only updates persisted position and parent state on release
+   * so we avoid re-rendering this page on every pointer pixel during drag.
+   */
+  const handleTimelineScrub = useCallback((segmentId, timeSec, { final = false } = {}) => {
+    if (segmentId !== activeSegment?.id) return;
+
+    playerRef.current?.scrubTo(timeSec, { final });
+
+    if (final) {
+      setPlaybackScrubSec(timeSec);
+      onPlaybackPositionChange?.(segmentId, timeSec);
+    }
+  }, [activeSegment?.id, onPlaybackPositionChange]);
+
   return (
     <Box component="article" className="camera-page">
       <Box className="camera-page-header" sx={{ pb: 1, borderBottom: 1, borderColor: 'divider' }}>
@@ -302,12 +340,13 @@ export default function CameraPageView({
           <LivePlayer src={api.liveUrl(camera.id)} active />
         ) : mode === 'playback' && activeSegment ? (
           <DVRPlayer
+            ref={playerRef}
             src={api.recordingUrl(activeSegment.id)}
             segmentId={activeSegment.id}
             segmentLabel={activeSegment.startLocalDisplay}
             durationSec={activeSegment.durationSec}
             initialTime={savedPlaybackTime}
-            onPlaybackTimeChange={onPlaybackPositionChange}
+            onPlaybackTimeChange={handlePlaybackTimeChange}
             mediaRevision={mediaRevision}
             onGoLive={goLive}
             isLiveMode={false}
@@ -341,6 +380,14 @@ export default function CameraPageView({
       <Timeline
         segments={timeline.segments}
         selectedId={mode === 'live' ? null : activeSegment?.id}
+        playbackScrub={
+          mode === 'playback' && activeSegment
+            ? { segmentId: activeSegment.id, timeSec: playbackScrubSec }
+            : null
+        }
+        onScrubChange={
+          mode === 'playback' && activeSegment ? handleTimelineScrub : undefined
+        }
         onSelect={selectSegment}
         rangeStart={timeline.rangeStart}
         rangeEnd={timeline.rangeEnd}

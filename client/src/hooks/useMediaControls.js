@@ -1,3 +1,8 @@
+/**
+ * Shared volume, mute, and fullscreen behavior for live and DVR players.
+ * Volume level is remembered in localStorage across sessions.
+ */
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const VOLUME_KEY = 'onvif-dvr-volume';
@@ -16,11 +21,11 @@ export function useMediaControls(videoRef) {
   const [muted, setMuted] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const applyVolume = useCallback((v, m) => {
+  const applyVolume = useCallback((level, isMuted) => {
     const video = videoRef.current;
     if (!video) return;
-    video.volume = v;
-    video.muted = m;
+    video.volume = level;
+    video.muted = isMuted;
   }, [videoRef]);
 
   useEffect(() => {
@@ -28,24 +33,24 @@ export function useMediaControls(videoRef) {
   }, [volume, muted, applyVolume]);
 
   useEffect(() => {
-    const onChange = () => {
+    const onFullscreenChange = () => {
       setIsFullscreen(document.fullscreenElement === containerRef.current);
     };
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
   }, []);
 
   const setVolume = useCallback((value) => {
-    const v = Math.max(0, Math.min(1, value));
-    setVolumeState(v);
-    localStorage.setItem(VOLUME_KEY, String(v));
-    if (v > 0) setMuted(false);
-    applyVolume(v, v === 0);
+    const level = Math.max(0, Math.min(1, value));
+    setVolumeState(level);
+    localStorage.setItem(VOLUME_KEY, String(level));
+    if (level > 0) setMuted(false);
+    applyVolume(level, level === 0);
   }, [applyVolume]);
 
   const toggleMute = useCallback(() => {
-    setMuted((m) => {
-      const next = !m;
+    setMuted((wasMuted) => {
+      const next = !wasMuted;
       applyVolume(volume, next);
       return next;
     });

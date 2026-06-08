@@ -1,3 +1,7 @@
+/**
+ * Top-of-app alert when recordings disk space is low or critically low.
+ * Renders nothing when storage is healthy or unavailable.
+ */
 import Alert from '@mui/material/Alert';
 import { formatBytes } from '../api.js';
 

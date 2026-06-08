@@ -1,3 +1,8 @@
+/**
+ * Light/dark theme toggle synced to localStorage and the document root.
+ * Initial theme is read before React mounts to avoid a flash of wrong colors.
+ */
+
 import { useEffect, useState } from 'react';
 
 const STORAGE_KEY = 'onvif-dvr-theme';

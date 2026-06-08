@@ -1,3 +1,9 @@
+/**
+ * Sidebar settings: theme, segment duration, retention, and recordings folder.
+ *
+ * Numeric fields commit on blur (or Enter) after validation; folder changes go through
+ * DirectoryPicker and save immediately on selection.
+ */
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -24,6 +30,10 @@ import {
   SEGMENT_DURATION_MIN_SEC,
 } from '../utils/segmentDuration.js';
 
+/**
+ * @param {object} props
+ * @param {object|null} [props.storage] - Disk usage snapshot from the server for the footer readout.
+ */
 export default function AppSettings({
   theme,
   onThemeChange,
@@ -46,6 +56,7 @@ export default function AppSettings({
   const [recordingsDirError, setRecordingsDirError] = useState('');
   const [directoryPickerOpen, setDirectoryPickerOpen] = useState(false);
 
+  // Sync local inputs when parent props change (e.g. after a successful save elsewhere).
   useEffect(() => {
     setMinutesInput(String(segmentDurationMinutes(segmentDurationSec)));
   }, [segmentDurationSec]);
@@ -78,6 +89,7 @@ export default function AppSettings({
     }
   };
 
+  /** Validate, clamp, and persist retention days; revert input on failure. */
   const commitRetentionDays = async () => {
     const days = Number(retentionDaysInput);
     if (!Number.isFinite(days) || days < MIN_RETENTION_DAYS || days > MAX_RETENTION_DAYS) {
@@ -106,6 +118,7 @@ export default function AppSettings({
     }
   };
 
+  /** Validate minutes, convert to seconds, and persist; active recordings restart on change. */
   const commitSegmentDuration = async () => {
     const minutes = Number(minutesInput);
     if (!Number.isFinite(minutes) || minutes <= 0) {

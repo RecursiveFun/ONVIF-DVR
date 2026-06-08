@@ -1,0 +1,9 @@
+#!/bin/sh
+# Blocks git push when server or client tests fail.
+# Enable once per clone: npm run setup:hooks
+
+set -e
+
+echo "pre-push: running full test suite..."
+npm test
+echo "pre-push: all tests passed."

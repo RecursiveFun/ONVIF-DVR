@@ -1,3 +1,4 @@
+/** Test helper — wraps components in the app's MUI theme provider. */
 import { render } from '@testing-library/react';
 import { createElement } from 'react';
 import AppThemeProvider from '../components/AppThemeProvider.jsx';

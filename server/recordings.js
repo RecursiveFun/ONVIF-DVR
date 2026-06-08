@@ -1,3 +1,9 @@
+/**
+ * Recorded segment catalog, retention purge, and timeline assembly.
+ *
+ * Scans per-camera MP4 segments under the configured recordings directory,
+ * enforces path confinement for playback/delete, and applies retention policy.
+ */
 import fs from 'fs';
 import path from 'path';
 import { assertPathInsideRoot } from './security.js';
@@ -6,7 +12,9 @@ import { getRecordingsDir, getRetentionDays, getSegmentSeconds } from './setting
 export { DEFAULT_RETENTION_DAYS as RETENTION_DAYS } from './settings.js';
 
 /**
- * Parse segment filename like 2026-06-08_14-30-00.mp4 into local Date.
+ * Parse segment filename like `2026-06-08_14-30-00.mp4` into a local Date.
+ * @param {string} filename Basename or path ending in `.mp4`.
+ * @returns {Date | null}
  */
 export function parseSegmentTime(filename) {
   const base = path.basename(filename, '.mp4');
@@ -35,6 +43,8 @@ function segmentAgeMs(filePath, filename) {
     return Date.now();
   }
 }
+
+// --- Retention purge ---
 
 function purgeDir(dir, cutoffMs) {
   let deleted = 0;
@@ -65,7 +75,11 @@ function purgeDir(dir, cutoffMs) {
   return deleted;
 }
 
-/** Delete recording segments older than the configured retention period. */
+/**
+ * Delete recording segments older than the configured retention period.
+ * @param {string | null} [cameraId] Limit purge to one camera folder, or all when omitted.
+ * @returns {number} Count of deleted files.
+ */
 export function purgeExpiredRecordings(cameraId = null) {
   const retentionDays = getRetentionDays();
   if (retentionDays === 0) return 0;
@@ -94,6 +108,13 @@ export function purgeExpiredRecordings(cameraId = null) {
   return deleted;
 }
 
+// --- Catalog and file access ---
+
+/**
+ * List all MP4 segments for a camera, sorted by start time.
+ * @param {string} cameraId
+ * @returns {object[]}
+ */
 export function listRecordings(cameraId) {
   const recordingsDir = getRecordingsDir();
   const dir = path.join(recordingsDir, cameraId);
@@ -134,6 +155,11 @@ export function listRecordings(cameraId) {
   return files;
 }
 
+/**
+ * Resolve a recording id (relative path under recordings root) to an on-disk file.
+ * @param {string} recordingId Path relative to recordings dir, e.g. `cameraId/2026-06-08_14-30-00.mp4`.
+ * @returns {string} Absolute validated file path.
+ */
 export function getRecordingFile(recordingId) {
   if (typeof recordingId !== 'string' || !recordingId || recordingId.includes('\0')) {
     throw new Error('Invalid recording path');
@@ -144,6 +170,11 @@ export function getRecordingFile(recordingId) {
   return normalized;
 }
 
+/**
+ * Delete one recording file and prune empty parent directories.
+ * @param {string} recordingId
+ * @returns {{ ok: boolean, id: string }}
+ */
 export function deleteRecording(recordingId) {
   const filePath = getRecordingFile(recordingId);
   fs.unlinkSync(filePath);
@@ -168,6 +199,11 @@ export function deleteRecording(recordingId) {
   return { ok: true, id: recordingId };
 }
 
+/**
+ * Build a timeline view with segment end times and overall range for the UI scrubber.
+ * @param {string} cameraId
+ * @returns {{ segments: object[], rangeStart: string | null, rangeEnd: string | null }}
+ */
 export function getTimeline(cameraId) {
   const segments = listRecordings(cameraId);
   if (segments.length === 0) {

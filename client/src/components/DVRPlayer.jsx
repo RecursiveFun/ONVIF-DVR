@@ -3,7 +3,7 @@ import Box from '@mui/material/Box';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { formatDuration, formatLocalTime } from '../api.js';
 import MediaToolbar from './MediaToolbar.jsx';
 import FullscreenButton from './FullscreenButton.jsx';
@@ -13,7 +13,14 @@ import { seekableEnd, usableDuration } from '../utils/playback.js';
 const SPEEDS = [0.5, 1, 1.5, 2, 4];
 const SKIP_SEC = 10;
 
-export default function DVRPlayer({
+/**
+ * Recorded-segment video player with transport controls.
+ *
+ * Exposes ref.scrubTo(timeSec, { final }) for timeline scrubbing:
+ *   - While dragging (final: false): pause and seek without resuming.
+ *   - On release (final: true): seek and resume if playback was active before the drag.
+ */
+const DVRPlayer = forwardRef(function DVRPlayer({
   src,
   segmentId,
   segmentLabel,
@@ -23,12 +30,14 @@ export default function DVRPlayer({
   onGoLive,
   isLiveMode,
   mediaRevision = 0,
-}) {
+}, ref) {
   const videoRef = useRef(null);
   const maxSeenTimeRef = useRef(0);
   const pendingSeekRef = useRef(null);
   const suppressTimeReportsRef = useRef(false);
   const lastMediaRevisionRef = useRef(mediaRevision);
+  // Set while the timeline is driving seeks; blocks timeupdate from fighting the drag.
+  const scrubSessionRef = useRef(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -43,9 +52,10 @@ export default function DVRPlayer({
     toggleFullscreen,
   } = useMediaControls(videoRef);
 
+  /** Tell the parent (and timeline playhead) where playback is, unless a seek is in flight. */
   const reportTime = useCallback((time) => {
     if (!segmentId || !Number.isFinite(time) || time < 0) return;
-    if (suppressTimeReportsRef.current) return;
+    if (suppressTimeReportsRef.current || scrubSessionRef.current) return;
     onPlaybackTimeChange?.(segmentId, time);
   }, [segmentId, onPlaybackTimeChange]);
 
@@ -262,6 +272,28 @@ export default function DVRPlayer({
     }
   }, [mediaRevision, seekTo]);
 
+  useImperativeHandle(ref, () => ({
+    scrubTo(timeSec, { final = false } = {}) {
+      if (!Number.isFinite(timeSec)) return;
+
+      if (final) {
+        const shouldResume = scrubSessionRef.current?.wasPlaying ?? false;
+        scrubSessionRef.current = null;
+        seekTo(timeSec, { resume: shouldResume });
+        return;
+      }
+
+      // First move in a drag: remember whether we should resume on release.
+      if (!scrubSessionRef.current) {
+        const video = videoRef.current;
+        const wasPlaying = Boolean(video && !video.paused && !video.ended);
+        scrubSessionRef.current = { wasPlaying };
+      }
+
+      seekTo(timeSec, { resume: false });
+    },
+  }), [seekTo]);
+
   const seek = (e) => {
     e.stopPropagation();
     const total = duration || getDuration();
@@ -359,6 +391,6 @@ export default function DVRPlayer({
       </div>
     </div>
   );
-}
+});
 
-export { formatLocalTime };
+export default DVRPlayer;

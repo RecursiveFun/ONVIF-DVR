@@ -1,5 +1,13 @@
+/**
+ * HTTP client for the ONVIF-DVR backend and shared display formatters.
+ *
+ * In development, Vite proxies `/api` and `/live` to the Node server.
+ * In LAN/production mode, the same paths are served from Express directly.
+ */
+
 const BASE = '';
 
+/** JSON fetch wrapper — throws with the server's error message on non-2xx responses. */
 async function request(path, options = {}) {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...options.headers },
@@ -43,6 +51,7 @@ export const api = {
   liveUrl: (cameraId) => `/live/${cameraId}/index.m3u8`,
 };
 
+/** Human-readable local date/time from an ISO string. */
 export function formatLocalTime(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString(undefined, {
@@ -51,6 +60,7 @@ export function formatLocalTime(iso) {
   });
 }
 
+/** Compact byte size for storage banners and timeline totals. */
 export function formatBytes(bytes) {
   if (!Number.isFinite(bytes) || bytes < 0) return '0 B';
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
@@ -59,6 +69,7 @@ export function formatBytes(bytes) {
   return `${Math.round(bytes)} B`;
 }
 
+/** m:ss or h:mm:ss for player controls. */
 export function formatDuration(seconds) {
   const s = Math.floor(seconds % 60);
   const m = Math.floor((seconds / 60) % 60);

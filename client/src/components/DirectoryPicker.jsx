@@ -1,3 +1,9 @@
+/**
+ * Modal folder browser backed by the server filesystem API.
+ *
+ * Lists drives/roots as chips, then subfolders only. The current path is what gets
+ * returned on "Select" — used by AppSettings to choose the recordings directory.
+ */
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import Alert from '@mui/material/Alert';
@@ -16,6 +22,12 @@ import Typography from '@mui/material/Typography';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 
+/**
+ * @param {object} props
+ * @param {boolean} props.open
+ * @param {string} [props.initialPath] - Folder to open first; falls back to first root.
+ * @param {(path: string) => void} props.onSelect
+ */
 export default function DirectoryPicker({ open, initialPath, onSelect, onClose }) {
   const [roots, setRoots] = useState([]);
   const [currentPath, setCurrentPath] = useState('');
@@ -39,6 +51,7 @@ export default function DirectoryPicker({ open, initialPath, onSelect, onClose }
     }
   }, []);
 
+  // Load roots and initial directory each time the dialog opens.
   useEffect(() => {
     if (!open) return undefined;
 

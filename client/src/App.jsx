@@ -1,3 +1,14 @@
+/**
+ * Application shell — sidebar, tabs or multiview, and the active camera page.
+ *
+ * State ownership:
+ *   cameras        — from API, refreshed periodically
+ *   tabs           — open camera/segment pages; restored from localStorage
+ *   multiviewIds   — which cameras show in grid mode
+ *   playbackPositionsRef — per-segment resume times (not React state; avoids re-renders)
+ *
+ * Drag-and-drop from the sidebar or timeline can open new tabs or reorder the tab bar.
+ */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
 import CameraSetup from './components/CameraSetup.jsx';
@@ -57,6 +68,8 @@ export default function App() {
   const [viewMode, setViewMode] = useState(loadViewMode);
   const [multiviewIds, setMultiviewIds] = useState([]);
 
+  // --- Tab session persistence (debounced writes to localStorage) ---
+
   const persistTabSession = useCallback(() => {
     if (!tabsInitializedRef.current) return;
     saveTabSession({
@@ -98,6 +111,8 @@ export default function App() {
     if (!segmentId) return 0;
     return playbackPositionsRef.current[segmentId] ?? 0;
   }, []);
+
+  // --- Derived active page ---
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || null;
   const activeCamera = activeTab
@@ -191,6 +206,8 @@ export default function App() {
     setRetentionDays(updated.retentionDays);
   }, []);
 
+  // --- Restore tabs once cameras are known ---
+
   useEffect(() => {
     const saved = loadTabSession();
     if (saved?.playbackPositions) {
@@ -255,6 +272,8 @@ export default function App() {
     );
     setActiveTabId(pickRecentTab(tabHistoryRef.current, tabs, staleId ? [staleId] : []));
   }, [tabs, activeTabId]);
+
+  // --- Camera and tab lifecycle ---
 
   const handleAdded = (cam) => {
     setCameras((prev) => [...prev, cam]);
@@ -425,6 +444,8 @@ export default function App() {
       setActiveTabId(focusTabId);
     }
   }, [cameras]);
+
+  // --- Tab bar drag-and-drop (reorder, or drop camera/segment from sidebar) ---
 
   const handleTabBarDrop = useCallback((payload, toIndex) => {
     setDragging(false);

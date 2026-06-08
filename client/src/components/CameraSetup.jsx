@@ -1,3 +1,9 @@
+/**
+ * Sidebar "Add Camera" panel with two paths: paste an RTSP URL or discover via ONVIF.
+ *
+ * ONVIF flow: scan the network, pick a device, fetch its stream URI, then submit.
+ * Credentials are shared across discovery and connect-by-IP but separate from RTSP URL auth.
+ */
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -10,12 +16,14 @@ import { useState } from 'react';
 import { api } from '../api.js';
 import SidebarSection from './SidebarSection.jsx';
 
+/** Gate ONVIF calls until username/password are filled in above the device list. */
 function requireCredentials(user, pass) {
   if (!user?.trim()) return 'Enter the ONVIF username first (above the device list).';
   if (!pass) return 'Enter the ONVIF password first (above the device list).';
   return null;
 }
 
+/** @param {{ onAdded: (camera: object) => void }} props */
 export default function CameraSetup({ onAdded }) {
   const [name, setName] = useState('');
   const [rtspUrl, setRtspUrl] = useState('');
@@ -115,6 +123,7 @@ export default function CameraSetup({ onAdded }) {
     }
   };
 
+  // Submit can auto-connect by IP when RTSP was not fetched explicitly.
   const submitOnvif = async (e) => {
     e.preventDefault();
     setError('');

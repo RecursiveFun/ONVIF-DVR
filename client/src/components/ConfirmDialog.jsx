@@ -1,3 +1,7 @@
+/**
+ * Modal confirmation for destructive or irreversible actions.
+ * Blocks dismiss while `confirming` so double-submit cannot close the dialog.
+ */
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
