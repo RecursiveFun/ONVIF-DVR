@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import {
   clampRetentionDays,
@@ -71,7 +70,7 @@ describe('settings', () => {
   it('resolves relative and absolute recordings paths', () => {
     const relative = resolveRecordingsDir('data/recordings');
     assert.equal(relative, DEFAULT_RECORDINGS_DIR);
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'onvif-settings-'));
+    const tempDir = fs.mkdtempSync(path.join(DATA_DIR, 'onvif-settings-'));
     assert.equal(resolveRecordingsDir(tempDir), path.resolve(tempDir));
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
@@ -88,7 +87,8 @@ describe('settings', () => {
 
   it('rejects unwritable recordings folders', () => {
     if (process.platform === 'win32') return;
-    const blocked = fs.mkdtempSync(path.join(os.tmpdir(), 'onvif-blocked-'));
+    // Under DATA_DIR so Linux CI passes browse-root validation before the write check.
+    const blocked = fs.mkdtempSync(path.join(DATA_DIR, 'onvif-blocked-'));
     try {
       fs.chmodSync(blocked, 0o000);
       assert.throws(() => validateRecordingsDir(blocked), /not writable/i);
