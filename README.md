@@ -284,7 +284,7 @@ Switch between **Live** and **Playback** with the mode toggle in the toolbar. On
 | Drag tab handle | Reorder tabs |
 | Drag camera/segment to tab bar | Open duplicate tab |
 | Close tab (×) | Close tab only — does not delete the camera |
-| **Remove** (live mode) | Delete camera (with confirmation) |
+| **Remove** (live mode) | Delete camera (with confirmation); optionally delete all DVR recordings and live cache |
 
 ### Settings
 

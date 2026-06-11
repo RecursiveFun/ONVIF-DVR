@@ -15,6 +15,8 @@ import CameraList from './components/CameraList.jsx';
 import CameraTabs from './components/CameraTabs.jsx';
 import MultiviewGridSizeToggle from './components/MultiviewGridSizeToggle.jsx';
 import Box from '@mui/material/Box';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import Typography from '@mui/material/Typography';
 import AppThemeProvider from './components/AppThemeProvider.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
@@ -67,6 +69,7 @@ export default function App() {
   const [activeTabId, setActiveTabId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [removeTargetId, setRemoveTargetId] = useState(null);
+  const [deleteCameraData, setDeleteCameraData] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [theme, setTheme] = useTheme();
@@ -307,6 +310,7 @@ export default function App() {
 
   const handleRemoved = (id) => {
     setCameras((prev) => prev.filter((c) => c.id !== id));
+    setMultiviewIds((prev) => removeMultiviewId(prev, id));
     setTabs((prev) => {
       const removedIds = prev.filter((t) => t.cameraId === id).map((t) => t.id);
       const remaining = prev.filter((t) => t.cameraId !== id);
@@ -319,12 +323,17 @@ export default function App() {
     });
   };
 
-  const removeCamera = async (id) => {
+  const resetRemoveDialog = () => {
+    setRemoveTargetId(null);
+    setDeleteCameraData(false);
+  };
+
+  const removeCamera = async (id, { deleteData = false } = {}) => {
     setRemoving(true);
     try {
-      await api.deleteCamera(id);
+      await api.deleteCamera(id, { deleteData });
       handleRemoved(id);
-      setRemoveTargetId(null);
+      resetRemoveDialog();
     } catch (err) {
       alert(err.message || 'Failed to remove camera');
     } finally {
@@ -332,13 +341,16 @@ export default function App() {
     }
   };
 
-  const requestRemoveCamera = (id) => setRemoveTargetId(id);
+  const requestRemoveCamera = (id) => {
+    setDeleteCameraData(false);
+    setRemoveTargetId(id);
+  };
   const cancelRemoveCamera = () => {
-    if (!removing) setRemoveTargetId(null);
+    if (!removing) resetRemoveDialog();
   };
   const confirmRemoveCamera = async () => {
     if (!removeTargetId || removing) return;
-    await removeCamera(removeTargetId);
+    await removeCamera(removeTargetId, { deleteData: deleteCameraData });
   };
 
   const focusCameraTab = useCallback((cameraId) => {
@@ -669,7 +681,23 @@ export default function App() {
       <ConfirmDialog
         open={Boolean(removeTarget)}
         title="Remove camera?"
-        description={`Remove "${removeTarget?.name}"? This will stop all streams and delete the camera from your list.`}
+        description={(
+          <>
+            <Typography variant="body2" sx={{ mb: 1.5 }}>
+              {`Remove "${removeTarget?.name}"? This stops all streams and removes the camera from your list.`}
+            </Typography>
+            <FormControlLabel
+              control={(
+                <Checkbox
+                  checked={deleteCameraData}
+                  onChange={(e) => setDeleteCameraData(e.target.checked)}
+                  disabled={removing}
+                />
+              )}
+              label="Also delete all DVR recordings and live cache for this camera"
+            />
+          </>
+        )}
         confirmLabel="Remove"
         confirming={removing}
         onCancel={cancelRemoveCamera}

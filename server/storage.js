@@ -7,6 +7,8 @@
 import { statfsSync } from 'fs';
 import fs from 'fs';
 import path from 'path';
+import { DATA_DIR } from './dataPaths.js';
+import { getDirectorySizeBytes } from './fsUtil.js';
 import { getRecordingsDir } from './settings.js';
 
 /** Stop new recordings below this free space (1 GB). */
@@ -58,34 +60,7 @@ export function getVolumeStats(targetPath = DATA_DIR) {
 
 /** Sum on-disk size of all files under the recordings tree. */
 export function getRecordingsBytes(root = getRecordingsDir()) {
-  if (!fs.existsSync(root)) return 0;
-
-  let total = 0;
-
-  function walk(current) {
-    let dirEntries;
-    try {
-      dirEntries = fs.readdirSync(current, { withFileTypes: true });
-    } catch {
-      return;
-    }
-
-    for (const entry of dirEntries) {
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        walk(full);
-      } else if (entry.isFile()) {
-        try {
-          total += fs.statSync(full).size;
-        } catch {
-          // ignore races with ffmpeg writing segments
-        }
-      }
-    }
-  }
-
-  walk(root);
-  return total;
+  return getDirectorySizeBytes(root);
 }
 
 // --- API-facing status and record guard ---

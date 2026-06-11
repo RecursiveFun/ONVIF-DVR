@@ -7,7 +7,6 @@
  */
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { spawnFfmpeg } from './ffmpegUtil.js';
 import {
   isFfmpegInvalidDataExit,
@@ -21,11 +20,9 @@ import { nextHttpInputFormat, probeHttpStreamFormat } from './httpStreamProbe.js
 import { isLiveHlsArtifact } from './liveHls.js';
 import { probeRtspHasAudio } from './rtspStreamProbe.js';
 import { ensureRecordingsDir, getRecordingsDir, getSegmentSeconds } from './settings.js';
+import { DATA_DIR, LIVE_DIR } from './dataPaths.js';
 import { assertCanRecord } from './storage.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const LIVE_DIR = path.join(DATA_DIR, 'live');
 const CAMERAS_FILE = path.join(DATA_DIR, 'cameras.json');
 const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 
@@ -642,4 +639,5 @@ export async function restartActiveRecordings() {
   }
 }
 
-export { LIVE_DIR, DATA_DIR, getRecordingsDir };
+export { DATA_DIR, LIVE_DIR } from './dataPaths.js';
+export { getRecordingsDir };

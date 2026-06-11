@@ -6,6 +6,7 @@ describe('api url helpers', () => {
     expect(api.recordingUrl('cam-1/2026-06-08_14-30-00.mp4'))
       .toBe('/api/recordings/cam-1/2026-06-08_14-30-00.mp4');
     expect(api.liveUrl('cam-1')).toBe('/live/cam-1/index.m3u8');
+    expect(api.previewUrl('cam-1')).toBe('/api/cameras/cam-1/preview.jpg');
   });
 });
 

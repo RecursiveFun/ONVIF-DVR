@@ -18,6 +18,14 @@ async function request(path, options = {}) {
   return data;
 }
 
+function post(path, body) {
+  const options = { method: 'POST' };
+  if (body !== undefined) options.body = JSON.stringify(body);
+  return request(path, options);
+}
+
+const cameraPost = (suffix) => (id) => post(`/api/cameras/${id}${suffix}`);
+
 export const api = {
   health: () => request('/api/health'),
   getStorage: () => request('/api/storage'),
@@ -28,23 +36,23 @@ export const api = {
   updateSettings: (body) =>
     request('/api/settings', { method: 'PATCH', body: JSON.stringify(body) }),
   listCameras: () => request('/api/cameras'),
-  addCamera: (body) => request('/api/cameras', { method: 'POST', body: JSON.stringify(body) }),
-  deleteCamera: (id) => request(`/api/cameras/${id}`, { method: 'DELETE' }),
-  startCamera: (id) => request(`/api/cameras/${id}/start`, { method: 'POST' }),
-  stopCamera: (id) => request(`/api/cameras/${id}/stop`, { method: 'POST' }),
-  startLive: (id) => request(`/api/cameras/${id}/live/start`, { method: 'POST' }),
-  stopLive: (id) => request(`/api/cameras/${id}/live/stop`, { method: 'POST' }),
-  startRecording: (id) => request(`/api/cameras/${id}/record/start`, { method: 'POST' }),
-  stopRecording: (id) => request(`/api/cameras/${id}/record/stop`, { method: 'POST' }),
+  addCamera: (body) => post('/api/cameras', body),
+  deleteCamera: (id, { deleteData = false } = {}) => {
+    const query = deleteData ? '?deleteData=true' : '';
+    return request(`/api/cameras/${id}${query}`, { method: 'DELETE' });
+  },
+  startCamera: cameraPost('/start'),
+  stopCamera: cameraPost('/stop'),
+  startLive: cameraPost('/live/start'),
+  stopLive: cameraPost('/live/stop'),
+  startRecording: cameraPost('/record/start'),
+  stopRecording: cameraPost('/record/stop'),
   getTimeline: (id) => request(`/api/cameras/${id}/timeline`),
   getRecordings: (id) => request(`/api/cameras/${id}/recordings`),
   discoverOnvif: () => request('/api/onvif/discover'),
-  probeOnvifHost: (body) =>
-    request('/api/onvif/probe-host', { method: 'POST', body: JSON.stringify(body) }),
-  connectOnvifHost: (body) =>
-    request('/api/onvif/connect', { method: 'POST', body: JSON.stringify(body) }),
-  getOnvifStreamUri: (body) =>
-    request('/api/onvif/stream-uri', { method: 'POST', body: JSON.stringify(body) }),
+  probeOnvifHost: (body) => post('/api/onvif/probe-host', body),
+  connectOnvifHost: (body) => post('/api/onvif/connect', body),
+  getOnvifStreamUri: (body) => post('/api/onvif/stream-uri', body),
   recordingUrl: (recordingId) => `/api/recordings/${recordingId}`,
   deleteRecording: (recordingId) =>
     request(`/api/recordings/${encodeURIComponent(recordingId)}`, { method: 'DELETE' }),

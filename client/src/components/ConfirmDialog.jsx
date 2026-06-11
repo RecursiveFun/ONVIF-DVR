@@ -19,12 +19,14 @@ export default function ConfirmDialog({
   confirmColor = 'error',
   onConfirm,
   onCancel,
+  children,
 }) {
   return (
     <Dialog open={open} onClose={confirming ? undefined : onCancel} maxWidth="xs" fullWidth>
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
-        <DialogContentText>{description}</DialogContentText>
+        <DialogContentText component="div">{description}</DialogContentText>
+        {children}
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel} disabled={confirming}>

@@ -7,6 +7,7 @@ import { createApp } from './app.js';
 import { checkFfmpeg } from './ffmpegUtil.js';
 import { resetSettingsForTests } from './settings.js';
 import { getRecordingsDir } from './settings.js';
+import { LIVE_DIR } from './dataPaths.js';
 
 const app = createApp();
 const TEST_CAM_NAME = '__api_integration_camera__';
@@ -198,6 +199,43 @@ describe('camera CRUD', () => {
     assert.match(res.body.rtspUrl, /^http:\/\/203\.181\.0\.118:6003\/cgi-bin\/camera\?/);
     assert.ok(res.body.rtspUrl.includes('quality=1'));
     await request(app).delete(`/api/cameras/${res.body.id}`).expect(200);
+  });
+
+  it('optionally deletes stored recordings and live cache', async () => {
+    const created = await request(app)
+      .post('/api/cameras')
+      .send({ name: '__delete_data_test__', rtspUrl: TEST_RTSP })
+      .expect(201);
+
+    const id = created.body.id;
+    const recordingsDir = path.join(getRecordingsDir(), id);
+    const liveDir = path.join(LIVE_DIR, id);
+    fs.mkdirSync(recordingsDir, { recursive: true });
+    fs.writeFileSync(path.join(recordingsDir, '2026-06-08_12-00-00.mp4'), 'delete-me');
+    fs.mkdirSync(liveDir, { recursive: true });
+    fs.writeFileSync(path.join(liveDir, 'index.m3u8'), '#EXTM3U');
+
+    const res = await request(app).delete(`/api/cameras/${id}?deleteData=true`).expect(200);
+    assert.equal(res.body.deleteData, true);
+    assert.ok(!fs.existsSync(recordingsDir));
+    assert.ok(!fs.existsSync(liveDir));
+  });
+
+  it('keeps stored data when deleteData is omitted', async () => {
+    const created = await request(app)
+      .post('/api/cameras')
+      .send({ name: '__keep_data_test__', rtspUrl: TEST_RTSP })
+      .expect(201);
+
+    const id = created.body.id;
+    const recordingsDir = path.join(getRecordingsDir(), id);
+    fs.mkdirSync(recordingsDir, { recursive: true });
+    fs.writeFileSync(path.join(recordingsDir, '2026-06-08_12-00-00.mp4'), 'keep-me');
+
+    const res = await request(app).delete(`/api/cameras/${id}`).expect(200);
+    assert.equal(res.body.deleteData, false);
+    assert.ok(fs.existsSync(recordingsDir));
+    fs.rmSync(recordingsDir, { recursive: true, force: true });
   });
 
   it('returns 404 for unknown camera routes', async () => {

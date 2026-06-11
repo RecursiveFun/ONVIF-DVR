@@ -20,7 +20,6 @@ import {
   sanitizeCamera,
   sanitizeRecording,
   securityHeaders,
-  validateOnvifHostname,
   validateRtspUrl,
 } from './security.js';
 import {
@@ -30,6 +29,8 @@ import {
   listNetworkInterfaces,
   probeHost,
 } from './onvifService.js';
+import { deleteCameraData } from './cameraData.js';
+import { LIVE_DIR } from './dataPaths.js';
 import { deleteRecording, getRecordingFile, getTimeline, listRecordings, purgeExpiredRecordings } from './recordings.js';
 import {
   clampRetentionDays,
@@ -42,12 +43,17 @@ import {
   updateSettings,
 } from './settings.js';
 import { listDirectory, listRoots } from './fsBrowser.js';
+import {
+  isTruthyQueryFlag,
+  parseOnvifHostname,
+  requireCamera,
+  requireFfmpeg,
+} from './routeHelpers.js';
 import { getStorageStatus } from './storage.js';
 import {
   addCamera,
   getCamera,
   listCameras,
-  LIVE_DIR,
   removeCamera,
   restartActiveRecordings,
   startAll,
@@ -257,21 +263,17 @@ export function createApp() {
   });
 
   app.delete('/api/cameras/:id', (req, res) => {
-    const cam = getCamera(req.params.id);
-    if (!cam) return res.status(404).json({ error: 'Camera not found' });
+    if (!requireCamera(req.params.id, res)) return;
+    const deleteData = isTruthyQueryFlag(req.query.deleteData);
     stopAll(req.params.id);
+    const dataResult = deleteData ? deleteCameraData(req.params.id) : null;
     removeCamera(req.params.id);
-    res.json({ ok: true });
+    res.json({ ok: true, deleteData, dataResult });
   });
 
   app.post('/api/cameras/:id/start', async (req, res) => {
+    if (!requireFfmpeg(res)) return;
     try {
-      const ffmpeg = checkFfmpeg();
-      if (!ffmpeg.available) {
-        return res.status(503).json({
-          error: 'FFmpeg is not installed. Install FFmpeg and restart the server.',
-        });
-      }
       const cam = await startAll(req.params.id);
       res.json(sanitizeCamera(cam));
     } catch (e) {
@@ -289,13 +291,8 @@ export function createApp() {
   });
 
   app.post('/api/cameras/:id/live/start', async (req, res) => {
+    if (!requireFfmpeg(res)) return;
     try {
-      const ffmpeg = checkFfmpeg();
-      if (!ffmpeg.available) {
-        return res.status(503).json({
-          error: 'FFmpeg is not installed. Install FFmpeg and restart the server.',
-        });
-      }
       res.json(sanitizeCamera(await startLive(req.params.id)));
     } catch (e) {
       res.status(400).json({ error: e.message });
@@ -308,13 +305,8 @@ export function createApp() {
   });
 
   app.post('/api/cameras/:id/record/start', async (req, res) => {
+    if (!requireFfmpeg(res)) return;
     try {
-      const ffmpeg = checkFfmpeg();
-      if (!ffmpeg.available) {
-        return res.status(503).json({
-          error: 'FFmpeg is not installed. Install FFmpeg and restart the server.',
-        });
-      }
       res.json(sanitizeCamera(await startRecording(req.params.id)));
     } catch (e) {
       res.status(400).json({ error: e.message });
@@ -327,8 +319,8 @@ export function createApp() {
   });
 
   app.get('/api/cameras/:id/preview.jpg', apiRateLimiter, async (req, res) => {
-    const cam = getCamera(req.params.id);
-    if (!cam) return res.status(404).json({ error: 'Camera not found' });
+    const cam = requireCamera(req.params.id, res);
+    if (!cam) return;
     if (!isHttpStreamUrl(cam.rtspUrl)) {
       return res.status(404).json({ error: 'Preview not available for this stream type' });
     }
@@ -343,14 +335,12 @@ export function createApp() {
   });
 
   app.get('/api/cameras/:id/recordings', (req, res) => {
-    const cam = getCamera(req.params.id);
-    if (!cam) return res.status(404).json({ error: 'Camera not found' });
+    if (!requireCamera(req.params.id, res)) return;
     res.json(listRecordings(req.params.id).map(sanitizeRecording));
   });
 
   app.get('/api/cameras/:id/timeline', (req, res) => {
-    const cam = getCamera(req.params.id);
-    if (!cam) return res.status(404).json({ error: 'Camera not found' });
+    if (!requireCamera(req.params.id, res)) return;
     res.json(getTimeline(req.params.id));
   });
 
@@ -407,12 +397,8 @@ export function createApp() {
 
   app.post('/api/onvif/probe-host', strictRateLimiter, async (req, res) => {
     const { hostname } = req.body ?? {};
-    let validatedHost;
-    try {
-      validatedHost = validateOnvifHostname(hostname);
-    } catch (e) {
-      return res.status(400).json({ error: e.message });
-    }
+    const validatedHost = parseOnvifHostname(hostname, res);
+    if (!validatedHost) return;
     try {
       const devices = await probeHost(validatedHost);
       res.json({ devices });
@@ -423,12 +409,8 @@ export function createApp() {
 
   app.post('/api/onvif/connect', strictRateLimiter, async (req, res) => {
     const { hostname, port, username, password } = req.body ?? {};
-    let validatedHost;
-    try {
-      validatedHost = validateOnvifHostname(hostname);
-    } catch (e) {
-      return res.status(400).json({ error: e.message });
-    }
+    const validatedHost = parseOnvifHostname(hostname, res);
+    if (!validatedHost) return;
     try {
       const result = await connectByHost({
         hostname: validatedHost,
@@ -444,12 +426,8 @@ export function createApp() {
 
   app.post('/api/onvif/stream-uri', strictRateLimiter, async (req, res) => {
     const { hostname, port, username, password, path: onvifPath, secure } = req.body ?? {};
-    let validatedHost;
-    try {
-      validatedHost = validateOnvifHostname(hostname);
-    } catch (e) {
-      return res.status(400).json({ error: e.message });
-    }
+    const validatedHost = parseOnvifHostname(hostname, res);
+    if (!validatedHost) return;
     try {
       const result = await getStreamUri({
         hostname: validatedHost,
