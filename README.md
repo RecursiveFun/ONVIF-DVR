@@ -594,7 +594,3 @@ cd server && npm run test:integration
 | Testing | Vitest, Testing Library, Supertest, Node test runner |
 
 ---
-
-## License
-
-Private project. All rights reserved.
